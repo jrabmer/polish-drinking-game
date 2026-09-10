@@ -120,6 +120,7 @@ Board files live in `config/`. Each is self-contained:
 |-----|--------|---------|
 | `move` | `d` | move `d` fields (negative = back), applied automatically |
 | `goto` | `to` | jump to field index `to`, automatically |
+| `gotoPlayer` | `target` | jump to another player's field — `"closestToStart"` (default) or `"closestToZiel"` |
 | `skip` | – | player sits out their next turn |
 | `again` | – | player rolls again after this field |
 | `allMove` | `d` | every player moves `d` fields |

@@ -615,6 +615,12 @@ function buildEffectUI(fx) {
       finish(t("sentTo", { pos: posLabel(fx.to) }));
       break;
     }
+    case "gotoPlayer": {
+      const ref = closestOtherPlayer(fx.target);
+      p.pos = clampTile(ref.pos);
+      finish(t("sentToPlayer", { name: ref.name, pos: posLabel(p.pos) }));
+      break;
+    }
     case "skip": {
       p.skip = true;
       finish(t("willSkip", { name: p.name }));
@@ -633,6 +639,7 @@ function buildEffectUI(fx) {
     case "combo": {
       fx.list.forEach((step) => {
         if (step.t === "goto") p.pos = step.to;
+        else if (step.t === "gotoPlayer") p.pos = clampTile(closestOtherPlayer(step.target).pos);
         else if (step.t === "move") p.pos = clampTile(p.pos + step.d);
         else if (step.t === "again") state.rollAgain = true;
         else if (step.t === "skip") p.skip = true;
@@ -774,6 +781,17 @@ function animateDie(finalFace, done) {
    ============================================================ */
 function clampTile(x) {
   return Math.max(0, Math.min(LAST_TILE, x));
+}
+
+// The other player nearest START (default) or nearest ZIEL (target: "closestToZiel").
+function closestOtherPlayer(target) {
+  const others = state.players.filter((_, i) => i !== state.turn);
+  let ref = others[0];
+  for (const o of others) {
+    const better = target === "closestToZiel" ? o.pos > ref.pos : o.pos < ref.pos;
+    if (better) ref = o;
+  }
+  return ref;
 }
 
 function posLabel(pos) {

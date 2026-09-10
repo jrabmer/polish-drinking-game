@@ -48,7 +48,7 @@
     { "n": 33, "c": 5, "r": 7, "text": { "en": "Drink and take off one piece of clothing.", "de": "Trinke und zieh ein Kleidungsstück aus.", "pl": "Wypij i zdejmij jedną część garderoby." }, "clothing": true },
     { "n": 34, "c": 6, "r": 7, "text": { "en": "Drink and choose a player who goes back to field 6.", "de": "Trinke und bestimme eine Person, die auf Feld 6 zurückgeht.", "pl": "Wypij i wskaż osobę, która wraca na pole 6." }, "fx": { "t": "sendOther", "to": 6 } },
     { "n": 35, "c": 7, "r": 7, "text": { "en": "Move to field 6.", "de": "Gehe auf Feld 6.", "pl": "Przejdź na pole 6." }, "fx": { "t": "goto", "to": 6 } },
-    { "n": 36, "c": 8, "r": 7, "text": { "en": "The player closest to START drinks — and you move there.", "de": "Die Person, die START am nächsten ist, trinkt — und du gehst dorthin.", "pl": "Pije gracz najbliżej STARTU — a ty przechodzisz na jego pole." } },
+    { "n": 36, "c": 8, "r": 7, "text": { "en": "The player closest to START drinks — and you move there.", "de": "Die Person, die START am nächsten ist, trinkt — und du gehst dorthin.", "pl": "Pije gracz najbliżej STARTU — a ty przechodzisz na jego pole." }, "fx": { "t": "gotoPlayer", "target": "closestToStart" } },
     { "n": 37, "c": 8, "r": 6, "text": { "en": "Everyone ahead of you drinks.", "de": "Alle, die vor dir sind, trinken.", "pl": "Piją wszyscy, którzy są przed tobą." } },
     { "n": 38, "c": 8, "r": 5, "big": true },
     { "n": 39, "c": 8, "r": 4, "text": { "en": "Drink and take off one piece of clothing.", "de": "Trinke und zieh ein Kleidungsstück aus.", "pl": "Wypij i zdejmij jedną część garderoby." }, "clothing": true },
