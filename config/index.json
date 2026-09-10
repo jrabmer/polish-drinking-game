@@ -1,6 +1,7 @@
 {
   "_comment": "List of board configurations the game offers in the setup dropdown. Add an entry per file you drop into this folder. 'file' is resolved relative to config/.",
   "configs": [
-    { "file": "classic.json", "name": "Classic spiral (70 fields)" }
+    { "file": "classic.json", "name": "Classic spiral (70 fields)" },
+    { "file": "random.json", "name": "Random board (shuffled tasks)" }
   ]
 }

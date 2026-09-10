@@ -265,6 +265,16 @@ kbd {
   overflow: hidden;
 }
 
+/* generated boards can be wider than the classic 9 columns */
+.board.dense .cell .num { font-size: clamp(6px, 0.85vw, 10px); }
+.board.dense .cell .task { font-size: clamp(4.5px, 0.8vw, 9px); line-height: 1.08; }
+.board.dense .cell.big .num { font-size: clamp(11px, 2.4vw, 26px); }
+.board.dense .token {
+  width: clamp(13px, 2.4vw, 22px);
+  height: clamp(13px, 2.4vw, 22px);
+  font-size: clamp(7px, 1.2vw, 11px);
+}
+
 .cell.big { align-items: center; justify-content: center; }
 .cell.big .num {
   font-size: clamp(14px, 3.2vw, 32px);

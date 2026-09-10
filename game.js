@@ -122,9 +122,14 @@ async function boot() {
   const saved = loadState();
   if (saved && Array.isArray(saved.players) && saved.players.length &&
       (saved.phase === "playing" || saved.phase === "won")) {
-    if (saved.configFile && saved.configFile !== CONFIG.meta.file &&
-        CONFIG_LIST.some((c) => c.file === saved.configFile)) {
-      try { await loadConfig(saved.configFile, saved.lang); } catch (e) { /* keep current */ }
+    // rebuild the exact board the saved game was played on (seed included)
+    const needsReload = saved.configFile &&
+      CONFIG_LIST.some((c) => c.file === saved.configFile) &&
+      (saved.configFile !== CONFIG.meta.file ||
+       (saved.boardSeed != null && saved.boardSeed !== CONFIG.meta.seed));
+    if (needsReload) {
+      try { await loadConfig(saved.configFile, saved.lang, saved.boardSeed); }
+      catch (e) { /* keep current */ }
     }
     if (saved.lang && langSupported(saved.lang)) LANG = saved.lang;
     if (saved.theme) { THEME = normTheme(saved.theme); applyTheme(); }
@@ -158,13 +163,19 @@ function pickConfigFile(file) {
   return CONFIG_LIST.some((c) => c.file === file) ? file : CONFIG_LIST[0].file;
 }
 
-async function loadConfig(file, preferLang) {
+async function loadConfig(file, preferLang, seed) {
   const cfg = await fetchJSON("config/" + file);
   cfg.meta = cfg.meta || {};
   cfg.meta.file = file;
   cfg.meta.languages = cfg.meta.languages && cfg.meta.languages.length
     ? cfg.meta.languages
     : ["en"];
+
+  // A generated board builds its own spiral and deals tasks from a pool.
+  if (cfg.meta.random) {
+    cfg.meta.seed = (seed == null) ? newSeed() : seed;
+    await buildRandomBoard(cfg, cfg.meta.seed);
+  }
 
   CONFIG = cfg;
   TILES = cfg.tiles;
@@ -182,6 +193,154 @@ async function loadConfig(file, preferLang) {
 
 function langSupported(code) {
   return !!CONFIG && CONFIG.meta.languages.indexOf(code) !== -1;
+}
+
+/* ============================================================
+   Random board generation
+
+   Math.random() can't be seeded, so a generated board uses mulberry32 with
+   an explicit seed: the seed is stored with the saved game, which means a
+   reload rebuilds the exact same board instead of a different one.
+   ============================================================ */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function newSeed() {
+  return Math.floor(Math.random() * 0xFFFFFFFF) >>> 0;
+}
+
+/* Cell coordinates of an inward spiral, starting bottom-left and ending in
+   the middle — the same shape as the printed board, for any grid size. */
+function spiralCells(cols, rows) {
+  const cells = [];
+  let left = 1, right = cols, top = 1, bottom = rows;
+  while (left <= right && top <= bottom) {
+    for (let c = left; c <= right; c++) cells.push([c, bottom]);          // →
+    for (let r = bottom - 1; r >= top; r--) cells.push([right, r]);       // ↑
+    if (top < bottom) {
+      for (let c = right - 1; c >= left; c--) cells.push([c, top]);       // ←
+    }
+    if (left < right) {
+      for (let r = top + 1; r <= bottom - 1; r++) cells.push([left, r]);  // ↓
+    }
+    left++; right--; top++; bottom--;
+  }
+  return cells;
+}
+
+const sourceCache = {};
+async function loadSourceTiles(file) {
+  if (!sourceCache[file]) sourceCache[file] = await fetchJSON("config/" + file);
+  return sourceCache[file].tiles || [];
+}
+
+// A task naming a specific field only makes sense if we also choose that
+// field, so imported tasks with a hard-coded target are left out; the pool
+// supplies its own versions using a "?" target and an {n} placeholder.
+function hasFixedTarget(fx) {
+  if (!fx) return false;
+  if (typeof fx.to === "number" || typeof fx.gotoOnMatch === "number") return true;
+  if (fx.then && hasFixedTarget(fx.then)) return true;
+  if (fx.list && fx.list.some(hasFixedTarget)) return true;
+  if (fx.opts && fx.opts.some((o) => hasFixedTarget(o.fx))) return true;
+  return false;
+}
+
+// Replace every "?" target with one randomly chosen field, and substitute
+// that number into the {n} placeholder in the task text.
+function materializeEntry(entry, lastTile, rnd) {
+  let chosen = null;
+  const pick = () => (chosen == null ? (chosen = 1 + Math.floor(rnd() * lastTile)) : chosen);
+
+  const walk = (fx) => {
+    if (!fx) return fx;
+    const out = Object.assign({}, fx);
+    if (out.to === "?") out.to = pick();
+    if (out.gotoOnMatch === "?") out.gotoOnMatch = pick();
+    if (out.list) out.list = out.list.map(walk);
+    if (out.then) out.then = walk(out.then);
+    if (out.opts) out.opts = out.opts.map((o) => Object.assign({}, o, { fx: walk(o.fx) }));
+    return out;
+  };
+
+  let fx = walk(entry.fx);
+  let text = entry.text;
+
+  // {n} can appear in the task text and in choice-button labels alike
+  if (chosen != null) {
+    const fill = (v) => {
+      if (typeof v === "string") return v.split("{n}").join(String(chosen));
+      if (Array.isArray(v)) return v.map(fill);
+      if (v && typeof v === "object") {
+        const o = {};
+        Object.keys(v).forEach((k) => { o[k] = fill(v[k]); });
+        return o;
+      }
+      return v;
+    };
+    text = fill(text);
+    fx = fill(fx);
+  }
+
+  const tile = { text: text, fx: fx };
+  if (entry.clothing) tile.clothing = true;
+  return tile;
+}
+
+async function buildRandomBoard(cfg, seed) {
+  const rnd = mulberry32(seed);
+  const meta = cfg.meta;
+
+  // ---- assemble the task pool: imported boards + this file's own entries ----
+  const pool = [];
+  for (const src of (meta.sources || [])) {
+    const tiles = await loadSourceTiles(src);
+    tiles.forEach((t) => {
+      if (!t.text || t.big || t.n === "START" || t.n === "ZIEL") return;
+      if (hasFixedTarget(t.fx)) return;
+      pool.push({ text: t.text, fx: t.fx, clothing: t.clothing });
+    });
+  }
+  (cfg.pool || []).forEach((p) => pool.push(p));
+  if (!pool.length) throw new Error(cfg.meta.file + ": empty task pool");
+
+  // ---- board shape ----
+  const sizes = (meta.sizes && meta.sizes.length) ? meta.sizes : [[11, 10]];
+  const [cols, rows] = sizes[Math.floor(rnd() * sizes.length)];
+  const cells = spiralCells(cols, rows);
+  const last = cells.length - 1;         // index of ZIEL
+  const lastTile = last - 1;             // highest numbered field
+
+  // ---- Fisher-Yates on a copy, so tasks run out only on very big boards ----
+  const bag = pool.slice();
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    const tmp = bag[i]; bag[i] = bag[j]; bag[j] = tmp;
+  }
+
+  const safeEvery = meta.safeEvery || 10;
+  const tiles = [];
+  let take = 0;
+  cells.forEach(([c, r], i) => {
+    if (i === 0) { tiles.push({ n: "START", c: c, r: r }); return; }
+    if (i === last) { tiles.push({ n: "ZIEL", c: c, r: r }); return; }
+    // breather fields on the same cadence as the original (8, 18, 28, ...)
+    if (i % safeEvery === (safeEvery - 2)) { tiles.push({ n: i, c: c, r: r, big: true }); return; }
+    const entry = bag[take++ % bag.length];
+    const built = materializeEntry(entry, lastTile, rnd);
+    built.n = i; built.c = c; built.r = r;
+    tiles.push(built);
+  });
+
+  cfg.tiles = tiles;
+  meta.gridCols = cols;
+  meta.gridRows = rows;
+  meta.winPos = last;
 }
 
 function buildConfigSelect() {
@@ -516,7 +675,15 @@ function onKey(e) {
   }
 }
 
-function onStartGame() {
+async function onStartGame() {
+  // a generated board gets reshuffled for every new game
+  if (CONFIG && CONFIG.meta.random) {
+    try {
+      await loadConfig(CONFIG.meta.file, LANG, newSeed());
+      applyLang();
+    } catch (err) { console.error(err); }
+  }
+
   const inputs = [...els.nameInputs.querySelectorAll("input")];
   const players = inputs.map((inp, i) => ({
     name: (inp.value.trim() || (t("playerN") + " " + (i + 1))).slice(0, 16),
@@ -532,6 +699,7 @@ function onStartGame() {
     rollAgain: false,
     winnerName: null,
     configFile: CONFIG.meta.file,
+    boardSeed: CONFIG.meta.random ? CONFIG.meta.seed : null,
     lang: LANG,
     theme: THEME,
     speak: SPEAK,
@@ -550,6 +718,7 @@ function buildBoard() {
   els.board.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   els.board.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
   els.board.style.aspectRatio = `${cols} / ${rows}`;
+  els.board.classList.toggle("dense", cols > 9);
   els.board.innerHTML = "";
   cellByPos.length = 0;
 
@@ -875,7 +1044,8 @@ function buildEffectUI(fx) {
     case "gotoPlayer": {
       const ref = closestOtherPlayer(fx.target);
       p.pos = clampTile(ref.pos);
-      finish(t("sentToPlayer", { name: ref.name, pos: posLabel(p.pos) }));
+      finish(t(fx.target === "closestToZiel" ? "sentToLeader" : "sentToPlayer",
+               { name: ref.name, pos: posLabel(p.pos) }));
       break;
     }
     case "skip": {
@@ -1097,6 +1267,7 @@ function restartSamePlayers() {
   state.phase = "playing";
   state.winnerName = null;
   state.configFile = CONFIG.meta.file;
+  state.boardSeed = CONFIG.meta.random ? CONFIG.meta.seed : null;
   state.lang = LANG;
   state.theme = THEME;
   state.speak = SPEAK;

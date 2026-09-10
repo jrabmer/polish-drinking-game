@@ -13,6 +13,7 @@ server code. English / German / Polish, and the board itself is swappable JSON.
 | `game.js` | Game logic + i18n plumbing (no board data) |
 | `config/index.json` | List of board configurations offered in the setup dropdown |
 | `config/classic.json` | The default 70-field spiral board (fields, positions, effects, text) |
+| `config/random.json` | Generated board: ~80 extra tasks + a generator that reshuffles every game |
 | `config/ui.json` | All interface strings, per language |
 
 ## Run locally
@@ -73,6 +74,42 @@ forced with `?theme=paper`. The wine & cheese decorations are inline SVG in `ind
 
 Each theme sets `--grid` (thin line between consecutive fields) and `--wall` (thick line
 along the spiral's walls) alongside its palette — see *Reading the spiral* below.
+
+## Random board
+
+Pick **Random board (shuffled tasks)** from the Board dropdown. It keeps the original 9×8
+spiral — same size, same 70 fields, same breather fields at 8/18/28/… — but every task is
+dealt fresh from a pool of about **130**: the ~80 new ones in `config/random.json` plus every
+suitable field imported from `classic.json`. Only 63 slots are filled, so each game shows a
+different mix and familiar tasks turn up in unfamiliar places. Two boards typically share
+fewer than half their tasks.
+
+A new board is generated every time you press **Start game** (and whenever you re-pick the
+entry in the dropdown). *Restart – same players* keeps the current board so a rematch is fair.
+
+**Seeding.** `Math.random()` can't be seeded, so generation uses **mulberry32** with an
+explicit seed, and the seed is saved alongside the game. A refresh therefore rebuilds the
+*exact* same board rather than a different one — without storing all ~16KB of tiles.
+
+**Getting stuck is allowed.** Nothing checks that a generated board is winnable; a chain of
+"go to field N" traps is fair game. In practice it rarely bites — 400 simulated games across
+40 boards all finished, averaging 77 turns (quicker than the classic board's ~510, whose four
+"back to START" fields are diluted here) — but if a board does trap you, Reset is right there.
+
+### Adding tasks to the pool
+
+Append to `pool` in `config/random.json`. Each entry is a tile without coordinates:
+
+```jsonc
+{ "text": { "en": "...", "de": "...", "pl": "..." }, "fx": { ... }, "clothing": true }
+```
+
+Because a generated task can land on any field, it must not name a *fixed* field number.
+To reference a field, write `"to": "?"` (or `"gotoOnMatch": "?"`) and put `{n}` in the text:
+the generator picks one field, substitutes the number everywhere — task text and choice-button
+labels alike — and both then agree. Imported tasks that hard-code a target are skipped for the
+same reason. Setting `meta.sizes` to more than one `[cols, rows]` pair lets the board shape
+vary too; the spiral is generated for whatever size is drawn.
 
 ## Reading the spiral
 
