@@ -1,0 +1,840 @@
+"use strict";
+
+/* ============================================================
+   Polish Drinking Game – spiral board
+   Pure client-side. No build step, no dependencies.
+
+   The board itself is data: config/index.json lists the
+   available board files, each board file (e.g. config/classic.json)
+   holds the fields, their grid positions, effects and per-language
+   text. Interface strings live in config/ui.json. Drop in another
+   board file + add it to config/index.json to offer a new variant.
+   ============================================================ */
+
+const PLAYER_COLORS = [
+  "#e6194b", "#3cb44b", "#4363d8", "#f58231",
+  "#911eb4", "#00b3b3", "#f032e6", "#9a6324",
+];
+
+const DIE_PIPS = {
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8],
+};
+
+const STATE_KEY = "pdg-state-v1";
+const PREFS_KEY = "pdg-prefs-v1";
+
+/* ---------- Runtime ---------- */
+let UI = null;              // parsed config/ui.json
+let LANGS = {};             // code -> display name
+let CONFIG_LIST = [];       // [{file, name}]
+let CONFIG = null;          // active board config
+let TILES = [];             // CONFIG.tiles, path order (index === position)
+let WIN_POS = 0;            // last index (ZIEL)
+let LAST_TILE = 0;          // WIN_POS - 1
+let LANG = "en";
+
+let state = null;
+let busy = false;
+let currentTilePos = null;  // field whose modal is open (for re-render on lang switch)
+
+/* ---------- Element cache ---------- */
+const el = (id) => document.getElementById(id);
+const els = {};
+const cellByPos = [];
+
+/* ============================================================
+   Boot
+   ============================================================ */
+document.addEventListener("DOMContentLoaded", boot);
+
+async function boot() {
+  [
+    "setupScreen", "gameScreen", "setupSubtitle", "loadError",
+    "labelBoard", "configSelect", "labelLang", "langSelect", "labelCount", "playerCount",
+    "nameInputs", "startBtn", "howSummary", "rulesList",
+    "turnInfo", "langSelectTop", "resetBtn", "board", "die", "rollBtn", "rollMsg", "playerPanel",
+    "tileModal", "tileTitle", "tileTask", "tileNote", "tileEffect", "tileActions",
+    "confirmModal", "confirmTitle", "confirmText", "confirmRestart", "confirmNew", "confirmCancel",
+    "winModal", "winTitleH", "winText", "winFlavour", "winAgain", "winNew", "toast",
+  ].forEach((id) => { els[id] = el(id); });
+
+  // --- load config files ---
+  try {
+    UI = await fetchJSON("config/ui.json");
+    LANGS = UI.languageNames || { en: "English" };
+    CONFIG_LIST = (await fetchJSON("config/index.json")).configs || [];
+    if (!CONFIG_LIST.length) throw new Error("no board configs listed");
+  } catch (err) {
+    console.error(err);
+    showFatal();
+    return;
+  }
+
+  const prefs = loadPrefs();
+  const params = new URLSearchParams(location.search);
+  const wantedFile =
+    params.get("config") ||
+    (prefs && prefs.configFile) ||
+    CONFIG_LIST[0].file;
+  const wantedLang = params.get("lang") || (prefs && prefs.lang) || null;
+
+  buildConfigSelect();
+  try {
+    await loadConfig(pickConfigFile(wantedFile), wantedLang);
+  } catch (err) {
+    console.error(err);
+    showFatal();
+    return;
+  }
+
+  buildPlayerCountOptions();
+  wireEvents();
+
+  // --- resume a saved game if there is one ---
+  const saved = loadState();
+  if (saved && Array.isArray(saved.players) && saved.players.length &&
+      (saved.phase === "playing" || saved.phase === "won")) {
+    if (saved.configFile && saved.configFile !== CONFIG.meta.file &&
+        CONFIG_LIST.some((c) => c.file === saved.configFile)) {
+      try { await loadConfig(saved.configFile, saved.lang); } catch (e) { /* keep current */ }
+    }
+    if (saved.lang && langSupported(saved.lang)) LANG = saved.lang;
+    state = saved;
+    applyLang();
+    enterGame();
+    if (state.phase === "won") showWin(state.winnerName);
+  } else {
+    applyLang();
+  }
+}
+
+function showFatal() {
+  els.loadError.textContent =
+    (UI && UI.en && UI.en.loadError) ||
+    "Could not load the config files. Serve this folder over HTTP (see README).";
+  els.loadError.classList.remove("hidden");
+}
+
+async function fetchJSON(path) {
+  const res = await fetch(path, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+  return res.json();
+}
+
+/* ============================================================
+   Config / language loading
+   ============================================================ */
+function pickConfigFile(file) {
+  return CONFIG_LIST.some((c) => c.file === file) ? file : CONFIG_LIST[0].file;
+}
+
+async function loadConfig(file, preferLang) {
+  const cfg = await fetchJSON("config/" + file);
+  cfg.meta = cfg.meta || {};
+  cfg.meta.file = file;
+  cfg.meta.languages = cfg.meta.languages && cfg.meta.languages.length
+    ? cfg.meta.languages
+    : ["en"];
+
+  CONFIG = cfg;
+  TILES = cfg.tiles;
+  WIN_POS = cfg.meta.winPos != null ? cfg.meta.winPos : TILES.length - 1;
+  LAST_TILE = WIN_POS - 1;
+
+  // choose a language this board actually provides
+  const want = preferLang || LANG || cfg.meta.defaultLanguage;
+  LANG = langSupported(want) ? want : (cfg.meta.defaultLanguage || cfg.meta.languages[0]);
+
+  buildLangSelects();
+  buildBoard();
+  els.configSelect.value = file;
+}
+
+function langSupported(code) {
+  return !!CONFIG && CONFIG.meta.languages.indexOf(code) !== -1;
+}
+
+function buildConfigSelect() {
+  els.configSelect.innerHTML = "";
+  CONFIG_LIST.forEach((c) => {
+    const o = document.createElement("option");
+    o.value = c.file;
+    o.textContent = c.name || c.file;
+    els.configSelect.appendChild(o);
+  });
+}
+
+function buildLangSelects() {
+  [els.langSelect, els.langSelectTop].forEach((sel) => {
+    sel.innerHTML = "";
+    CONFIG.meta.languages.forEach((code) => {
+      const o = document.createElement("option");
+      o.value = code;
+      o.textContent = LANGS[code] || code;
+      sel.appendChild(o);
+    });
+    sel.value = LANG;
+  });
+}
+
+/* ============================================================
+   i18n helpers
+   ============================================================ */
+function t(key, params) {
+  const dict = (UI && UI[LANG]) || (UI && UI.en) || {};
+  let s = dict[key];
+  if (s == null) s = (UI && UI.en && UI.en[key] != null) ? UI.en[key] : key;
+  if (params) {
+    for (const k in params) s = s.split("{" + k + "}").join(params[k]);
+  }
+  return s;
+}
+
+// A field's text may be a plain string or {lang: string}
+function fieldText(tile) {
+  const tx = tile.text;
+  if (tx == null) return "";
+  if (typeof tx === "string") return tx;
+  return tx[LANG] || tx[CONFIG.meta.defaultLanguage] || tx[Object.keys(tx)[0]] || "";
+}
+function labelText(label) {
+  if (label == null) return "";
+  if (typeof label === "string") return label;
+  return label[LANG] || label[CONFIG.meta.defaultLanguage] || label[Object.keys(label)[0]] || "";
+}
+
+function applyLang() {
+  document.documentElement.lang = LANG;
+
+  els.setupSubtitle.innerHTML = t("subtitle");
+  els.labelBoard.textContent = t("board");
+  els.labelLang.textContent = t("language");
+  els.labelCount.textContent = t("numPlayers");
+  els.startBtn.textContent = t("startGame");
+  els.howSummary.textContent = t("howItWorks");
+  els.resetBtn.textContent = t("reset");
+  els.rollBtn.textContent = t("roll");
+
+  els.confirmTitle.textContent = t("resetTitle");
+  els.confirmText.textContent = t("resetText");
+  els.confirmRestart.textContent = t("restartSame");
+  els.confirmNew.textContent = t("newGame");
+  els.confirmCancel.textContent = t("cancel");
+
+  els.winTitleH.textContent = t("winTitle");
+  els.winFlavour.textContent = t("winFlavour");
+  els.winAgain.textContent = t("playAgain");
+  els.winNew.textContent = t("winNew");
+
+  const rules = (UI[LANG] && UI[LANG].rules) || UI.en.rules || [];
+  els.rulesList.innerHTML = "";
+  rules.forEach((r) => {
+    const li = document.createElement("li");
+    li.innerHTML = r;
+    els.rulesList.appendChild(li);
+  });
+
+  els.langSelect.value = LANG;
+  els.langSelectTop.value = LANG;
+
+  renderNameInputs();
+  rebuildBoardText();
+
+  if (state) {
+    renderTokens();
+    if (state.phase === "won") {
+      els.winText.textContent = t("winText", { name: state.winnerName });
+      els.rollMsg.textContent = t("wonReset", { name: state.winnerName });
+    } else if (els.rollMsg.dataset.key) {
+      els.rollMsg.textContent = t(els.rollMsg.dataset.key, JSON.parse(els.rollMsg.dataset.params || "{}"));
+    }
+  }
+
+  if (currentTilePos != null && !els.tileModal.classList.contains("hidden")) {
+    openTile(currentTilePos);
+  }
+}
+
+// remember the last status message so it can be re-localised on language switch
+function setRollMsg(key, params) {
+  els.rollMsg.dataset.key = key;
+  els.rollMsg.dataset.params = JSON.stringify(params || {});
+  els.rollMsg.textContent = t(key, params);
+}
+
+/* ============================================================
+   Setup screen
+   ============================================================ */
+function buildPlayerCountOptions() {
+  els.playerCount.innerHTML = "";
+  for (let i = 2; i <= 8; i++) {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = String(i);
+    els.playerCount.appendChild(o);
+  }
+  els.playerCount.value = "4";
+}
+
+function renderNameInputs() {
+  const count = Number(els.playerCount.value || 4);
+  const existing = [...els.nameInputs.querySelectorAll("input")].map((i) => i.value);
+  els.nameInputs.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    const row = document.createElement("div");
+    row.className = "name-row";
+
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = PLAYER_COLORS[i];
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 16;
+    input.placeholder = t("playerN") + " " + (i + 1);
+    input.value = existing[i] || "";
+
+    row.appendChild(dot);
+    row.appendChild(input);
+    els.nameInputs.appendChild(row);
+  }
+}
+
+function wireEvents() {
+  els.playerCount.addEventListener("change", renderNameInputs);
+
+  els.configSelect.addEventListener("change", async () => {
+    try {
+      await loadConfig(els.configSelect.value, LANG);
+      savePrefs();
+      applyLang();
+    } catch (err) {
+      console.error(err);
+      showFatal();
+    }
+  });
+
+  const onLangChange = (e) => {
+    const code = e.target.value;
+    if (!langSupported(code)) return;
+    LANG = code;
+    savePrefs();
+    if (state) { state.lang = LANG; saveState(); }
+    applyLang();
+  };
+  els.langSelect.addEventListener("change", onLangChange);
+  els.langSelectTop.addEventListener("change", onLangChange);
+
+  els.startBtn.addEventListener("click", onStartGame);
+  els.rollBtn.addEventListener("click", onRoll);
+
+  els.resetBtn.addEventListener("click", () => show(els.confirmModal));
+  els.confirmCancel.addEventListener("click", () => hide(els.confirmModal));
+  els.confirmRestart.addEventListener("click", () => { hide(els.confirmModal); restartSamePlayers(); });
+  els.confirmNew.addEventListener("click", () => { hide(els.confirmModal); toSetup(); });
+  els.winAgain.addEventListener("click", () => { hide(els.winModal); restartSamePlayers(); });
+  els.winNew.addEventListener("click", () => { hide(els.winModal); toSetup(); });
+}
+
+function onStartGame() {
+  const inputs = [...els.nameInputs.querySelectorAll("input")];
+  const players = inputs.map((inp, i) => ({
+    name: (inp.value.trim() || (t("playerN") + " " + (i + 1))).slice(0, 16),
+    color: PLAYER_COLORS[i],
+    pos: 0,
+    skip: false,
+  }));
+
+  state = {
+    phase: "playing",
+    players,
+    turn: 0,
+    rollAgain: false,
+    winnerName: null,
+    configFile: CONFIG.meta.file,
+    lang: LANG,
+  };
+  saveState();
+  applyLang();
+  enterGame();
+}
+
+/* ============================================================
+   Board rendering
+   ============================================================ */
+function buildBoard() {
+  const cols = CONFIG.meta.gridCols || 9;
+  const rows = CONFIG.meta.gridRows || 8;
+  els.board.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  els.board.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  els.board.style.aspectRatio = `${cols} / ${rows}`;
+  els.board.innerHTML = "";
+  cellByPos.length = 0;
+
+  TILES.forEach((tile, pos) => {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.style.gridColumn = String(tile.c);
+    cell.style.gridRow = String(tile.r);
+
+    if (tile.n === "START") cell.classList.add("start");
+    else if (pos === WIN_POS) cell.classList.add("ziel");
+    else if (tile.big) cell.classList.add("big", "safe");
+    else if (tile.clothing) cell.classList.add("clothing");
+
+    const num = document.createElement("div");
+    num.className = "num";
+    cell.appendChild(num);
+
+    const task = document.createElement("div");
+    task.className = "task";
+    cell.appendChild(task);
+
+    const tokens = document.createElement("div");
+    tokens.className = "tokens";
+    cell.appendChild(tokens);
+
+    els.board.appendChild(cell);
+    cellByPos[pos] = cell;
+  });
+
+  rebuildBoardText();
+}
+
+// (re)fill the language-dependent text on every cell
+function rebuildBoardText() {
+  if (!cellByPos.length) return;
+  TILES.forEach((tile, pos) => {
+    const cell = cellByPos[pos];
+    if (!cell) return;
+    const num = cell.querySelector(".num");
+    const task = cell.querySelector(".task");
+    if (tile.n === "START") num.textContent = t("start");
+    else if (pos === WIN_POS) num.textContent = t("ziel");
+    else num.textContent = tile.n;
+    task.textContent = tile.big ? "" : fieldText(tile);
+  });
+}
+
+function renderTokens() {
+  cellByPos.forEach((cell) => {
+    cell.classList.remove("current");
+    cell.querySelector(".tokens").innerHTML = "";
+  });
+
+  state.players.forEach((p, i) => {
+    const cell = cellByPos[p.pos];
+    if (!cell) return;
+    const tk = document.createElement("div");
+    tk.className = "token" + (i === state.turn && state.phase === "playing" ? " active" : "");
+    tk.style.background = p.color;
+    tk.textContent = String(i + 1);
+    tk.title = p.name;
+    cell.querySelector(".tokens").appendChild(tk);
+  });
+
+  if (state.phase === "playing") {
+    const c = cellByPos[state.players[state.turn].pos];
+    if (c) c.classList.add("current");
+  }
+
+  renderPanel();
+  renderTurnInfo();
+}
+
+function renderPanel() {
+  els.playerPanel.innerHTML = "";
+  state.players.forEach((p, i) => {
+    const li = document.createElement("li");
+    if (i === state.turn && state.phase === "playing") li.classList.add("turn");
+
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = p.color;
+
+    const name = document.createElement("span");
+    name.className = "pname";
+    name.textContent = (i + 1) + ". " + p.name;
+
+    const meta = document.createElement("span");
+    meta.className = "pmeta";
+    meta.textContent = posLabel(p.pos);
+
+    li.appendChild(dot);
+    li.appendChild(name);
+    if (p.skip) {
+      const b = document.createElement("span");
+      b.className = "badge";
+      b.textContent = t("skipsNext");
+      li.appendChild(b);
+    }
+    li.appendChild(meta);
+    els.playerPanel.appendChild(li);
+  });
+}
+
+function renderTurnInfo() {
+  if (state.phase !== "playing") { els.turnInfo.innerHTML = "&nbsp;"; return; }
+  const p = state.players[state.turn];
+  els.turnInfo.innerHTML =
+    `<span class="chip" style="background:${p.color}"></span>` + escapeText(t("turnOf", { name: p.name }));
+}
+
+/* ============================================================
+   Turn flow
+   ============================================================ */
+function enterGame() {
+  els.setupScreen.classList.add("hidden");
+  els.gameScreen.classList.remove("hidden");
+  setDieFace(1);
+  renderTokens();
+  if (state.phase === "won") {
+    els.rollMsg.textContent = t("wonReset", { name: state.winnerName });
+    els.rollBtn.disabled = true;
+  } else {
+    setRollMsg("tapToStart");
+    els.rollBtn.disabled = false;
+  }
+}
+
+function onRoll() {
+  if (busy || !state || state.phase !== "playing") return;
+  busy = true;
+  els.rollBtn.disabled = true;
+  els.rollMsg.textContent = "";
+  delete els.rollMsg.dataset.key;
+
+  const finalRoll = 1 + Math.floor(Math.random() * 6);
+  animateDie(finalRoll, () => applyRoll(finalRoll));
+}
+
+function applyRoll(roll) {
+  const p = state.players[state.turn];
+  const target = p.pos + roll;
+
+  if (target > WIN_POS) {
+    setRollMsg("overshoot", { name: p.name, roll, by: target - WIN_POS });
+    saveState();
+    endTurn(1100);
+    return;
+  }
+
+  if (target === WIN_POS) {
+    p.pos = WIN_POS;
+    renderTokens();
+    state.phase = "won";
+    state.winnerName = p.name;
+    saveState();
+    showWin(p.name);
+    busy = false;
+    return;
+  }
+
+  p.pos = target;
+  renderTokens();
+  setRollMsg("rolledTo", { name: p.name, roll, pos: posLabel(target) });
+  saveState();
+  setTimeout(() => openTile(target), 420);
+}
+
+function endTurn(delay) {
+  setTimeout(() => {
+    const n = state.players.length;
+    let guard = 0;
+    while (guard < n * 2) {
+      state.turn = (state.turn + 1) % n;
+      guard++;
+      const np = state.players[state.turn];
+      if (np.skip) {
+        np.skip = false;
+        toast(t("sitsOut", { name: np.name }));
+      } else {
+        break;
+      }
+    }
+    state.rollAgain = false;
+    renderTokens();
+    saveState();
+    els.rollBtn.disabled = false;
+    busy = false;
+  }, delay || 0);
+}
+
+/* ============================================================
+   Field modal + effects
+   ============================================================ */
+function openTile(pos) {
+  const tile = TILES[pos];
+  currentTilePos = pos;
+
+  els.tileTitle.textContent = pos === WIN_POS ? t("ziel") : t("fieldTitle", { n: tile.n });
+  els.tileTask.textContent = tile.big ? t("safeField") : fieldText(tile);
+
+  if (tile.clothing) {
+    els.tileNote.textContent = t("clothing");
+    els.tileNote.classList.remove("hidden");
+  } else {
+    els.tileNote.classList.add("hidden");
+  }
+
+  els.tileEffect.innerHTML = "";
+  els.tileActions.innerHTML = "";
+
+  if (!tile.fx) addContinueButton();
+  else buildEffectUI(tile.fx);
+
+  show(els.tileModal);
+}
+
+function buildEffectUI(fx) {
+  const p = state.players[state.turn];
+
+  const finish = (msg) => {
+    els.tileEffect.innerHTML = `<p class="fx-result">${escapeText(msg)}</p>`;
+    renderTokens();
+    saveState();
+    addContinueButton();
+  };
+  const moveMsg = (delta) =>
+    (delta > 0 ? t("movedFwd", { n: delta, pos: posLabel(p.pos) })
+               : t("movedBack", { n: -delta, pos: posLabel(p.pos) }));
+
+  switch (fx.t) {
+    case "move": {
+      p.pos = clampTile(p.pos + fx.d);
+      finish(moveMsg(fx.d));
+      break;
+    }
+    case "goto": {
+      p.pos = fx.to;
+      finish(t("sentTo", { pos: posLabel(fx.to) }));
+      break;
+    }
+    case "skip": {
+      p.skip = true;
+      finish(t("willSkip", { name: p.name }));
+      break;
+    }
+    case "again": {
+      state.rollAgain = true;
+      finish(t("rollsAgainAfter", { name: p.name }));
+      break;
+    }
+    case "allMove": {
+      state.players.forEach((pl) => { pl.pos = clampTile(pl.pos + fx.d); });
+      finish(fx.d > 0 ? t("everyoneFwd", { n: fx.d }) : t("everyoneBack", { n: -fx.d }));
+      break;
+    }
+    case "combo": {
+      fx.list.forEach((step) => {
+        if (step.t === "goto") p.pos = step.to;
+        else if (step.t === "move") p.pos = clampTile(p.pos + step.d);
+        else if (step.t === "again") state.rollAgain = true;
+        else if (step.t === "skip") p.skip = true;
+        else if (step.t === "allMove") state.players.forEach((pl) => { pl.pos = clampTile(pl.pos + step.d); });
+      });
+      finish(state.rollAgain
+        ? t("sentToAndAgain", { pos: posLabel(p.pos) })
+        : t("sentTo", { pos: posLabel(p.pos) }));
+      break;
+    }
+    case "diceBack": {
+      els.tileEffect.appendChild(mkBtn(t("rollNDice", { n: fx.times }), () => {
+        const rolls = [];
+        let sum = 0;
+        for (let i = 0; i < fx.times; i++) {
+          const d = 1 + Math.floor(Math.random() * 6);
+          rolls.push(d);
+          sum += d;
+        }
+        p.pos = clampTile(p.pos - sum);
+        finish(t("rolledBack", { rolls: rolls.join(" + "), sum, pos: posLabel(p.pos) }));
+      }));
+      break;
+    }
+    case "choice": {
+      fx.opts.forEach((opt) => {
+        els.tileEffect.appendChild(mkBtn(labelText(opt.label), () => {
+          if (opt.fx && opt.fx.t === "move") p.pos = clampTile(p.pos + opt.fx.d);
+          else if (opt.fx && opt.fx.t === "goto") p.pos = opt.fx.to;
+          finish(opt.fx
+            ? t("chose", { label: labelText(opt.label), pos: posLabel(p.pos) })
+            : t("choseNoMove", { label: labelText(opt.label) }));
+        }));
+      });
+      break;
+    }
+    case "sendOther": {
+      const info = document.createElement("p");
+      info.className = "tile-note";
+      info.textContent = t("pickPlayer", { pos: posLabel(fx.to) });
+      els.tileEffect.appendChild(info);
+      state.players.forEach((pl, i) => {
+        if (i === state.turn) return;
+        els.tileEffect.appendChild(mkBtn(pl.name, () => {
+          pl.pos = fx.to;
+          finish(t("playerSent", { name: pl.name, pos: posLabel(fx.to) }));
+        }));
+      });
+      break;
+    }
+    default:
+      addContinueButton();
+  }
+}
+
+function addContinueButton() {
+  els.tileActions.innerHTML = "";
+  els.tileActions.appendChild(mkBtn(t("continue"), closeTile, "btn-primary"));
+}
+
+function closeTile() {
+  hide(els.tileModal);
+  currentTilePos = null;
+  const rollAgain = state.rollAgain;
+  state.rollAgain = false;
+  renderTokens();
+
+  if (rollAgain && state.phase === "playing") {
+    setRollMsg("rollsAgain", { name: state.players[state.turn].name });
+    els.rollBtn.disabled = false;
+    busy = false;
+    saveState();
+  } else {
+    endTurn(0);
+  }
+}
+
+/* ============================================================
+   Win / reset
+   ============================================================ */
+function showWin(name) {
+  els.winText.textContent = t("winText", { name });
+  els.rollBtn.disabled = true;
+  els.rollMsg.textContent = t("wonReset", { name });
+  renderTokens();
+  show(els.winModal);
+}
+
+function restartSamePlayers() {
+  state.players.forEach((p) => { p.pos = 0; p.skip = false; });
+  state.turn = 0;
+  state.rollAgain = false;
+  state.phase = "playing";
+  state.winnerName = null;
+  state.configFile = CONFIG.meta.file;
+  state.lang = LANG;
+  busy = false;
+  saveState();
+  enterGame();
+}
+
+function toSetup() {
+  clearState();
+  state = null;
+  busy = false;
+  currentTilePos = null;
+  els.gameScreen.classList.add("hidden");
+  els.setupScreen.classList.remove("hidden");
+  applyLang();
+}
+
+/* ============================================================
+   Die animation
+   ============================================================ */
+function setDieFace(face) {
+  const pips = DIE_PIPS[face] || [];
+  [...els.die.children].forEach((span, i) => {
+    span.classList.toggle("on", pips.indexOf(i) !== -1);
+  });
+}
+
+function animateDie(finalFace, done) {
+  els.die.classList.add("rolling");
+  let ticks = 0;
+  const iv = setInterval(() => {
+    setDieFace(1 + Math.floor(Math.random() * 6));
+    ticks++;
+    if (ticks >= 9) {
+      clearInterval(iv);
+      els.die.classList.remove("rolling");
+      setDieFace(finalFace);
+      setTimeout(done, 180);
+    }
+  }, 65);
+}
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+function clampTile(x) {
+  return Math.max(0, Math.min(LAST_TILE, x));
+}
+
+function posLabel(pos) {
+  if (pos === 0) return t("start");
+  if (pos === WIN_POS) return t("ziel");
+  return t("posField", { n: pos });
+}
+
+function mkBtn(label, onClick, extraClass) {
+  const b = document.createElement("button");
+  b.className = "btn" + (extraClass ? " " + extraClass : "");
+  b.textContent = label;
+  b.addEventListener("click", onClick, { once: true });
+  return b;
+}
+
+function show(node) { node.classList.remove("hidden"); }
+function hide(node) { node.classList.add("hidden"); }
+
+let toastTimer = null;
+function toast(msg) {
+  els.toast.textContent = msg;
+  show(els.toast);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => hide(els.toast), 2600);
+}
+
+function escapeText(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+/* ============================================================
+   Persistence (localStorage)
+   ============================================================ */
+function saveState() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !Array.isArray(s.players) || !s.players.length) return null;
+    return s;
+  } catch (e) { return null; }
+}
+function clearState() {
+  try { localStorage.removeItem(STATE_KEY); } catch (e) { /* ignore */ }
+}
+
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({
+      configFile: CONFIG ? CONFIG.meta.file : null,
+      lang: LANG,
+    }));
+  } catch (e) { /* ignore */ }
+}
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY) || "null"); }
+  catch (e) { return null; }
+}

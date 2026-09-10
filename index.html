@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Polish Drinking Game</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ================= SETUP SCREEN ================= -->
+    <section id="setupScreen" class="screen">
+      <div class="card">
+        <h1>Polish Drinking Game</h1>
+        <p id="setupSubtitle" class="subtitle"></p>
+
+        <p id="loadError" class="load-error hidden"></p>
+
+        <label class="field">
+          <span id="labelBoard"></span>
+          <select id="configSelect"></select>
+        </label>
+
+        <label class="field">
+          <span id="labelLang"></span>
+          <select id="langSelect"></select>
+        </label>
+
+        <label class="field">
+          <span id="labelCount"></span>
+          <select id="playerCount"></select>
+        </label>
+
+        <div id="nameInputs" class="name-inputs"></div>
+
+        <button id="startBtn" class="btn btn-primary btn-block"></button>
+
+        <details class="rules">
+          <summary id="howSummary"></summary>
+          <ul id="rulesList"></ul>
+        </details>
+      </div>
+    </section>
+
+    <!-- ================= GAME SCREEN ================= -->
+    <section id="gameScreen" class="screen hidden">
+      <header class="topbar">
+        <div id="turnInfo" class="turn-info">&nbsp;</div>
+        <div class="topbar-actions">
+          <select id="langSelectTop" class="lang-mini"></select>
+          <button id="resetBtn" class="btn btn-ghost"></button>
+        </div>
+      </header>
+
+      <div class="board-wrap">
+        <div id="board" class="board"></div>
+      </div>
+
+      <div class="controls">
+        <div id="die" class="die" aria-label="die">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+        <button id="rollBtn" class="btn btn-primary"></button>
+        <div id="rollMsg" class="roll-msg">&nbsp;</div>
+      </div>
+
+      <ul id="playerPanel" class="player-panel"></ul>
+    </section>
+
+    <!-- ================= FIELD MODAL ================= -->
+    <div id="tileModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-box">
+        <h2 id="tileTitle">Field</h2>
+        <p id="tileTask" class="tile-task"></p>
+        <p id="tileNote" class="tile-note hidden"></p>
+        <div id="tileEffect" class="tile-effect"></div>
+        <div id="tileActions" class="tile-actions"></div>
+      </div>
+    </div>
+
+    <!-- ================= RESET / CONFIRM MODAL ================= -->
+    <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-box">
+        <h2 id="confirmTitle"></h2>
+        <p id="confirmText"></p>
+        <div class="tile-actions">
+          <button id="confirmRestart" class="btn"></button>
+          <button id="confirmNew" class="btn"></button>
+          <button id="confirmCancel" class="btn btn-ghost"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= WIN MODAL ================= -->
+    <div id="winModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-box">
+        <h2 id="winTitleH"></h2>
+        <p id="winText"></p>
+        <p id="winFlavour" class="tile-note"></p>
+        <div class="tile-actions">
+          <button id="winAgain" class="btn btn-primary"></button>
+          <button id="winNew" class="btn btn-ghost"></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

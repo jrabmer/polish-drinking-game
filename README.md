@@ -1,0 +1,144 @@
+# Polish Drinking Game
+
+A browser version of the spiral board drinking game ("this game has never been finished").
+Pure client-side — plain HTML, CSS and JavaScript. No build step, no dependencies, no
+server code. English / German / Polish, and the board itself is swappable JSON.
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `index.html` | Markup for the setup screen, board, controls and modals |
+| `styles.css` | All styling (dark theme, responsive board) |
+| `game.js` | Game logic + i18n plumbing (no board data) |
+| `config/index.json` | List of board configurations offered in the setup dropdown |
+| `config/classic.json` | The default 70-field spiral board (fields, positions, effects, text) |
+| `config/ui.json` | All interface strings, per language |
+
+## Run locally
+
+The page loads its CSS, JS and the `config/*.json` files over HTTP, so open it through a
+web server rather than `file://`:
+
+```bash
+python3 -m http.server 4173
+```
+
+Then visit <http://localhost:4173>.
+
+## Host on GitHub Pages
+
+1. Push `index.html`, `styles.css`, `game.js` and the `config/` folder to a repository
+   (they must keep the same relative layout, or adjust the paths in `index.html` /
+   `game.js`).
+2. Repository **Settings → Pages → Build and deployment → Deploy from a branch**.
+3. Pick the branch and `/ (root)` folder, save.
+4. The game is served at `https://<user>.github.io/<repo>/`.
+
+Any other static host (Netlify, Cloudflare Pages, S3, nginx) works the same way — just
+serve the files as-is.
+
+## How the game works
+
+- Add 2–8 players and their names, pick a **board** and a **language**, then **Start game**.
+  Everyone begins on **START**.
+- On your turn, press **Roll** (one d6). Your token moves that many fields.
+- The field you land on shows its task. Do it, or drink instead, then press **Continue**.
+- Fields showing only a big number (8, 18, 28, 38, 48, 58, 68 on the classic board) are
+  safe — no task.
+- **Fixed movement** tasks are applied automatically: "go to field 32", "back 2 fields",
+  "to START", etc. The field you land on *after* an automatic move is **not** re-triggered
+  (keeps the game from looping).
+- **Dice-based movement** tasks ("roll 3 dice and go back that many") give you a roll
+  button inside the popup.
+- Choice fields ("drink 3 **or** back 4"), "send another player to field 6", "everyone
+  back 1", "roll again" and "sit out a turn" are all handled in the popup / on the panel.
+- You must land on **ZIEL** exactly. Overshoot and your turn is forfeited.
+- First to land on ZIEL exactly wins.
+
+## Controls during a game
+
+- **Roll** — take your turn.
+- **Language** dropdown (top bar) — switch EN / DE / PL at any time, mid-game included.
+- **Reset** (top right) — choose *Restart (same players, back to START)* or *New game
+  (back to the setup screen)*.
+
+## Saved state
+
+The current game (players, positions, whose turn, skip/roll-again flags, winner, chosen
+board and language) is written to `localStorage` after every action, so a refresh or
+accidental tab close drops you straight back into the game. "New game" / reset clears it.
+The selected board + language are also remembered for the setup screen. Everything is
+per-browser and never leaves the device.
+
+You can also force a board or language from the URL: `?config=classic.json` and `?lang=de`.
+
+## Languages
+
+`config/ui.json` holds every interface string under a language key (`en`, `de`, `pl`),
+plus `languageNames` for the dropdown labels. `{name}`, `{roll}`, `{pos}`, `{n}`, `{by}`,
+`{sum}`, `{rolls}` and `{label}` are placeholders filled in at runtime. Add a new language
+by adding a key here **and** listing its code in a board config's `meta.languages`. Missing
+keys fall back to English.
+
+## Editing or adding a board
+
+Board files live in `config/`. Each is self-contained:
+
+```jsonc
+{
+  "meta": {
+    "name": "Classic spiral",
+    "languages": ["en", "de", "pl"],
+    "defaultLanguage": "en",
+    "gridCols": 9,
+    "gridRows": 8,
+    "winPos": 71               // index of ZIEL (last field)
+  },
+  "tiles": [
+    { "n": "START", "c": 1, "r": 8 },
+    { "n": 1, "c": 2, "r": 8,
+      "text": { "en": "Everyone drinks.", "de": "Alle trinken.", "pl": "Wszyscy piją." } },
+    { "n": 3, "c": 4, "r": 8, "text": { ... }, "fx": { "t": "move", "d": -2 } },
+    { "n": "ZIEL", "c": 4, "r": 4 }
+  ]
+}
+```
+
+- `tiles` is in **path order**: index `0` = START, index `N` = field `N`, last index = ZIEL.
+  `goto` / `sendOther` targets are these indices (`0` = START).
+- `c` / `r` are 1-based grid column / row. `gridCols` × `gridRows` cells must exist and each
+  `c,r` pair must be unique; consecutive fields should be grid-adjacent so the path reads
+  as a spiral.
+- `big: true` → safe field (no task). `clothing: true` → adds the "remove a piece of
+  clothing" hint. `text` may be a plain string (same in every language) or a
+  `{ lang: string }` object.
+
+### Effect shapes (`fx`)
+
+| `t` | fields | meaning |
+|-----|--------|---------|
+| `move` | `d` | move `d` fields (negative = back), applied automatically |
+| `goto` | `to` | jump to field index `to`, automatically |
+| `skip` | – | player sits out their next turn |
+| `again` | – | player rolls again after this field |
+| `allMove` | `d` | every player moves `d` fields |
+| `diceBack` | `times` | popup button: roll `times` dice, move back the total |
+| `choice` | `opts` | popup buttons; each `opt` is `{ "label": <text>, "fx": <fx or null> }` |
+| `sendOther` | `to` | popup: pick another player, who jumps to field `to` |
+| `combo` | `list` | run several of the above in order (used for "go to 28 **and** roll again") |
+
+The field you land on after an automatic `move` / `goto` / `combo` is not re-evaluated.
+
+### Registering a new board
+
+Add an entry to `config/index.json`:
+
+```json
+{ "configs": [
+  { "file": "classic.json", "name": "Classic spiral (70 fields)" },
+  { "file": "my-board.json", "name": "My custom board" }
+] }
+```
+
+It then appears in the **Board** dropdown on the setup screen.
