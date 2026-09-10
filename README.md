@@ -214,6 +214,9 @@ Board files live in `config/`. Each is self-contained:
 | `again` | – | player rolls again after this field |
 | `allMove` | `d` | every player moves `d` fields |
 | `diceBack` | `times` | popup button: roll `times` dice, move back the total |
+| `allRoll` | `drinkOn`, `gotoOnMatch` | popup button: roll one die **per player** and list the results, highlighting whoever rolled a value in `drinkOn`; if `gotoOnMatch` is set, those players also move to that field |
+| `rollOne` | – | popup button: roll a single die and show the value (and whether it's odd/even) — the field text says who drinks |
+| `coin` | – | popup button: flip a coin and show heads/tails |
 | `choice` | `opts` | popup buttons; each `opt` is `{ "label": <text>, "fx": <fx or null> }` |
 | `sendOther` | `to` | popup: pick another player, who jumps to field `to` |
 | `combo` | `list` | run several of the above in order (used for "go to 28 **and** roll again") |

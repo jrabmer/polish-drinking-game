@@ -844,11 +844,18 @@ function openTile(pos) {
 function buildEffectUI(fx) {
   const p = state.players[state.turn];
 
-  const finish = (msg) => {
-    els.tileEffect.innerHTML = `<p class="fx-result">${escapeText(msg)}</p>`;
+  const finishNode = (node) => {
+    els.tileEffect.innerHTML = "";
+    els.tileEffect.appendChild(node);
     renderTokens();
     saveState();
     addContinueButton();
+  };
+  const finish = (msg) => {
+    const p = document.createElement("p");
+    p.className = "fx-result";
+    p.textContent = msg;
+    finishNode(p);
   };
   const moveMsg = (delta) =>
     (delta > 0 ? t("movedFwd", { n: delta, pos: posLabel(p.pos) })
@@ -916,6 +923,99 @@ function buildEffectUI(fx) {
       focusSoon(diceBtn);
       break;
     }
+    /* Everyone rolls a die; whoever matches drinks (and optionally moves). */
+    case "allRoll": {
+      const hits = (fx.drinkOn || []).map(Number);
+      const btn = mkBtn(t("everyoneRolls"), () => {
+        const results = state.players.map((pl) => ({ pl, roll: rollD6() }));
+        const matched = results.filter((r) => hits.indexOf(r.roll) !== -1);
+
+        if (fx.gotoOnMatch != null) {
+          matched.forEach((r) => { r.pl.pos = clampTile(fx.gotoOnMatch); });
+        }
+
+        const box = document.createElement("div");
+        box.className = "roll-results";
+        results.forEach(({ pl, roll }) => {
+          const hit = hits.indexOf(roll) !== -1;
+          const row = document.createElement("div");
+          row.className = "roll-row" + (hit ? " hit" : "");
+
+          const who = document.createElement("span");
+          who.className = "rr-name";
+          who.textContent = pl.name;
+
+          const val = document.createElement("span");
+          val.className = "rr-die";
+          val.style.background = pl.color;
+          val.textContent = String(roll);
+
+          const verdict = document.createElement("span");
+          verdict.className = "rr-verdict";
+          verdict.textContent = hit
+            ? t("drinksLabel") + (fx.gotoOnMatch != null ? " → " + posLabel(fx.gotoOnMatch) : "")
+            : "";
+
+          row.appendChild(val);
+          row.appendChild(who);
+          row.appendChild(verdict);
+          box.appendChild(row);
+        });
+
+        if (!matched.length) {
+          const safe = document.createElement("p");
+          safe.className = "fx-result";
+          safe.textContent = t("nobodyMatched");
+          box.appendChild(safe);
+        }
+        finishNode(box);
+      });
+      els.tileEffect.appendChild(btn);
+      focusSoon(btn);
+      break;
+    }
+
+    /* Roll one die and show it; the field text says who drinks. An optional
+       `then` effect runs afterwards ("drink what you roll, then go to START"). */
+    case "rollOne": {
+      const btn = mkBtn(t("rollOneBtn"), () => {
+        const d = rollD6();
+        let msg = t("youRolled", { roll: d, parity: t(d % 2 === 0 ? "even" : "odd") });
+        const step = fx.then;
+        if (step) {
+          if (step.t === "goto") {
+            p.pos = clampTile(step.to);
+            msg += " " + t("sentTo", { pos: posLabel(step.to) });
+          } else if (step.t === "move") {
+            p.pos = clampTile(p.pos + step.d);
+            msg += " " + (step.d > 0
+              ? t("movedFwd", { n: step.d, pos: posLabel(p.pos) })
+              : t("movedBack", { n: -step.d, pos: posLabel(p.pos) }));
+          } else if (step.t === "skip") {
+            p.skip = true;
+            msg += " " + t("willSkip", { name: p.name });
+          } else if (step.t === "again") {
+            state.rollAgain = true;
+            msg += " " + t("rollsAgainAfter", { name: p.name });
+          }
+        }
+        finish(msg);
+      });
+      els.tileEffect.appendChild(btn);
+      focusSoon(btn);
+      break;
+    }
+
+    /* Flip a coin and show it; the field text says who drinks. */
+    case "coin": {
+      const btn = mkBtn(t("flipCoin"), () => {
+        finish(t("coinResult", { side: t(Math.random() < 0.5 ? "heads" : "tails") }));
+      });
+      els.tileEffect.appendChild(btn);
+      focusSoon(btn);
+      break;
+    }
+
     case "choice": {
       fx.opts.forEach((opt) => {
         els.tileEffect.appendChild(mkBtn(labelText(opt.label), () => {

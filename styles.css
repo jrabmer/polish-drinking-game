@@ -452,6 +452,45 @@ kbd {
 .tile-note { color: var(--muted); font-size: 0.9rem; margin: 8px 0; }
 .tile-effect { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
 .tile-effect .fx-result { margin: 0; font-size: 0.95rem; }
+
+/* per-player results for "everyone rolls" fields */
+.roll-results { display: flex; flex-direction: column; gap: 6px; }
+.roll-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 0.92rem;
+}
+.roll-row.hit {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.roll-row .rr-die {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.45);
+  text-shadow: 0 1px 1px rgba(0,0,0,.45);
+}
+.roll-row .rr-name { font-weight: 700; }
+.roll-row .rr-verdict {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+.roll-results .fx-result { margin-top: 4px; color: var(--muted); }
 .tile-actions {
   display: flex;
   flex-wrap: wrap;
