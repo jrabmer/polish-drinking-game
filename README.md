@@ -56,22 +56,37 @@ serve the files as-is.
 - You must land on **ZIEL** exactly. Overshoot and your turn is forfeited.
 - First to land on ZIEL exactly wins.
 
+## Themes
+
+Pick a look from the **Theme** dropdown (setup screen, or the top bar mid-game):
+
+| Theme | Look |
+|-------|------|
+| **Modern** | Dark UI, coloured fields (default) |
+| **Original paper** | Black-on-white, thick grid lines, Arial — like the printout |
+| **Wine & cheese** | Warm cream / wine-red palette with cheese, grapes, wine glass & bottle SVGs around the board (from the wine-and-cheese nights this game gets played at) |
+
+Themes are pure CSS: `game.js` sets `data-theme="modern|paper|cheese"` on `<html>` and the
+rules live at the bottom of `styles.css`. The chosen theme is saved (per browser) and can be
+forced with `?theme=paper`. The wine & cheese decorations are inline SVG in `index.html`
+(`#boardDeco`), shown only for that theme.
+
 ## Controls during a game
 
 - **Roll** — take your turn.
-- **Language** dropdown (top bar) — switch EN / DE / PL at any time, mid-game included.
+- **Theme** and **Language** dropdowns (top bar) — switch at any time, mid-game included.
 - **Reset** (top right) — choose *Restart (same players, back to START)* or *New game
   (back to the setup screen)*.
 
 ## Saved state
 
 The current game (players, positions, whose turn, skip/roll-again flags, winner, chosen
-board and language) is written to `localStorage` after every action, so a refresh or
+board, language and theme) is written to `localStorage` after every action, so a refresh or
 accidental tab close drops you straight back into the game. "New game" / reset clears it.
-The selected board + language are also remembered for the setup screen. Everything is
-per-browser and never leaves the device.
+The selected board, language and theme are also remembered for the setup screen. Everything
+is per-browser and never leaves the device.
 
-You can also force a board or language from the URL: `?config=classic.json` and `?lang=de`.
+You can also force settings from the URL: `?config=classic.json`, `?lang=de`, `?theme=paper`.
 
 ## Languages
 

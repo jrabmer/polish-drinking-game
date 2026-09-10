@@ -38,6 +38,9 @@ let WIN_POS = 0;            // last index (ZIEL)
 let LAST_TILE = 0;          // WIN_POS - 1
 let LANG = "en";
 
+const THEME_IDS = ["modern", "paper", "cheese"];
+let THEME = "modern";
+
 let state = null;
 let busy = false;
 let currentTilePos = null;  // field whose modal is open (for re-render on lang switch)
@@ -55,9 +58,10 @@ document.addEventListener("DOMContentLoaded", boot);
 async function boot() {
   [
     "setupScreen", "gameScreen", "setupSubtitle", "loadError",
-    "labelBoard", "configSelect", "labelLang", "langSelect", "labelCount", "playerCount",
+    "labelBoard", "configSelect", "labelLang", "langSelect",
+    "labelTheme", "themeSelect", "labelCount", "playerCount",
     "nameInputs", "startBtn", "howSummary", "rulesList",
-    "turnInfo", "langSelectTop", "resetBtn", "board", "die", "rollBtn", "rollMsg", "playerPanel",
+    "turnInfo", "themeSelectTop", "langSelectTop", "resetBtn", "board", "die", "rollBtn", "rollMsg", "playerPanel",
     "tileModal", "tileTitle", "tileTask", "tileNote", "tileEffect", "tileActions",
     "confirmModal", "confirmTitle", "confirmText", "confirmRestart", "confirmNew", "confirmCancel",
     "winModal", "winTitleH", "winText", "winFlavour", "winAgain", "winNew", "toast",
@@ -83,7 +87,11 @@ async function boot() {
     CONFIG_LIST[0].file;
   const wantedLang = params.get("lang") || (prefs && prefs.lang) || null;
 
+  THEME = normTheme(params.get("theme") || (prefs && prefs.theme) || "modern");
+  applyTheme();
+
   buildConfigSelect();
+  buildThemeSelects();
   try {
     await loadConfig(pickConfigFile(wantedFile), wantedLang);
   } catch (err) {
@@ -104,6 +112,7 @@ async function boot() {
       try { await loadConfig(saved.configFile, saved.lang); } catch (e) { /* keep current */ }
     }
     if (saved.lang && langSupported(saved.lang)) LANG = saved.lang;
+    if (saved.theme) { THEME = normTheme(saved.theme); applyTheme(); }
     state = saved;
     applyLang();
     enterGame();
@@ -183,6 +192,30 @@ function buildLangSelects() {
 }
 
 /* ============================================================
+   Theme
+   ============================================================ */
+function normTheme(id) {
+  return THEME_IDS.indexOf(id) !== -1 ? id : "modern";
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute("data-theme", THEME);
+}
+
+function buildThemeSelects() {
+  [els.themeSelect, els.themeSelectTop].forEach((sel) => {
+    sel.innerHTML = "";
+    THEME_IDS.forEach((id) => {
+      const o = document.createElement("option");
+      o.value = id;
+      o.textContent = t("theme" + id.charAt(0).toUpperCase() + id.slice(1));
+      sel.appendChild(o);
+    });
+    sel.value = THEME;
+  });
+}
+
+/* ============================================================
    i18n helpers
    ============================================================ */
 function t(key, params) {
@@ -214,6 +247,7 @@ function applyLang() {
   els.setupSubtitle.innerHTML = t("subtitle");
   els.labelBoard.textContent = t("board");
   els.labelLang.textContent = t("language");
+  els.labelTheme.textContent = t("theme");
   els.labelCount.textContent = t("numPlayers");
   els.startBtn.textContent = t("startGame");
   els.howSummary.textContent = t("howItWorks");
@@ -241,6 +275,7 @@ function applyLang() {
 
   els.langSelect.value = LANG;
   els.langSelectTop.value = LANG;
+  if (UI) buildThemeSelects();
 
   renderNameInputs();
   rebuildBoardText();
@@ -330,6 +365,17 @@ function wireEvents() {
   els.langSelect.addEventListener("change", onLangChange);
   els.langSelectTop.addEventListener("change", onLangChange);
 
+  const onThemeChange = (e) => {
+    THEME = normTheme(e.target.value);
+    applyTheme();
+    savePrefs();
+    if (state) { state.theme = THEME; saveState(); }
+    els.themeSelect.value = THEME;
+    els.themeSelectTop.value = THEME;
+  };
+  els.themeSelect.addEventListener("change", onThemeChange);
+  els.themeSelectTop.addEventListener("change", onThemeChange);
+
   els.startBtn.addEventListener("click", onStartGame);
   els.rollBtn.addEventListener("click", onRoll);
 
@@ -358,6 +404,7 @@ function onStartGame() {
     winnerName: null,
     configFile: CONFIG.meta.file,
     lang: LANG,
+    theme: THEME,
   };
   saveState();
   applyLang();
@@ -736,6 +783,7 @@ function restartSamePlayers() {
   state.winnerName = null;
   state.configFile = CONFIG.meta.file;
   state.lang = LANG;
+  state.theme = THEME;
   busy = false;
   saveState();
   enterGame();
@@ -849,6 +897,7 @@ function savePrefs() {
     localStorage.setItem(PREFS_KEY, JSON.stringify({
       configFile: CONFIG ? CONFIG.meta.file : null,
       lang: LANG,
+      theme: THEME,
     }));
   } catch (e) { /* ignore */ }
 }

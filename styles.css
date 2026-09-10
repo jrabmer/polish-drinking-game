@@ -24,6 +24,7 @@ html, body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
 }
+html, body { overflow-x: hidden; }
 
 .app {
   max-width: 1000px;
@@ -155,8 +156,13 @@ select, input[type="text"] {
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .lang-mini {
+  width: auto;
+  flex: 0 0 auto;
+  max-width: 42vw;
   background: var(--panel-2);
   border: 1px solid var(--line);
   color: var(--text);
@@ -178,6 +184,7 @@ select, input[type="text"] {
   width: 100%;
   display: flex;
   justify-content: center;
+  position: relative;
 }
 .board {
   width: min(96vw, 900px);
@@ -395,3 +402,125 @@ select, input[type="text"] {
   .cell .task { font-size: 6px; }
   h1 { font-size: 1.6rem; }
 }
+
+/* ============================================================
+   Board decorations (wine & cheese theme only)
+   ============================================================ */
+.board-deco {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(96vw, 900px);
+  height: 100%;
+  pointer-events: none;
+  display: none;
+}
+[data-theme="cheese"] .board-deco { display: block; }
+[data-theme="cheese"] .board-wrap {
+  margin-top: clamp(26px, 7vw, 54px);
+  margin-bottom: clamp(26px, 7vw, 54px);
+}
+
+.deco-item {
+  position: absolute;
+  width: clamp(38px, 8vw, 84px);
+  filter: drop-shadow(0 4px 7px rgba(60, 30, 10, .3));
+}
+.deco-item svg { display: block; width: 100%; height: auto; }
+
+.d-tl { top: -6%; left: -4%; transform: rotate(-13deg); }
+.d-tr { top: -7%; right: -4%; transform: rotate(11deg); }
+.d-bl { bottom: -6%; left: -4%; transform: rotate(9deg); }
+.d-br { bottom: -7%; right: -5%; transform: rotate(-11deg); }
+.d-tc { top: -10%; left: 50%; transform: translateX(-50%) rotate(-4deg); width: clamp(30px, 6vw, 64px); }
+.d-bc { bottom: -10%; left: 50%; transform: translateX(-50%) rotate(5deg); width: clamp(34px, 7vw, 74px); }
+
+@media (max-width: 680px) {
+  .d-tc, .d-bc { display: none; }
+  .deco-item { width: clamp(30px, 13vw, 46px); }
+}
+
+/* ============================================================
+   Theme: Original paper (looks like the printout)
+   ============================================================ */
+[data-theme="paper"] {
+  --bg: #f6f4ec;
+  --panel: #ffffff;
+  --panel-2: #efece1;
+  --line: #111111;
+  --text: #0f0f0f;
+  --muted: #3f3f3f;
+  --accent: #111111;
+  --accent-ink: #ffffff;
+  --safe: #ffffff;
+  --clothing: #ffffff;
+  --start: #ffffff;
+  --ziel: #ffffff;
+  font-family: Arial, "Helvetica Neue", Helvetica, "Liberation Sans", sans-serif;
+}
+[data-theme="paper"] body {
+  background: #e7e4d8;
+  background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.022) 0 1px, transparent 1px 3px);
+}
+[data-theme="paper"] .card,
+[data-theme="paper"] .modal-box {
+  border-width: 2px;
+  border-radius: 4px;
+  box-shadow: 7px 7px 0 rgba(0,0,0,.14);
+}
+[data-theme="paper"] h1 { letter-spacing: 0; }
+[data-theme="paper"] .btn { border-color: #000; border-radius: 4px; }
+[data-theme="paper"] .btn-ghost { background: transparent; }
+
+[data-theme="paper"] .board {
+  gap: 2px;
+  background: #000;
+  border-color: #000;
+  border-width: 3px;
+  border-radius: 2px;
+}
+[data-theme="paper"] .cell { background: #fff; }
+[data-theme="paper"] .cell .num { color: #000; }
+[data-theme="paper"] .cell .task { color: #000; }
+[data-theme="paper"] .cell.big .num { color: #000; }
+[data-theme="paper"] .cell.clothing .task { font-weight: 700; }
+[data-theme="paper"] .cell.start .num,
+[data-theme="paper"] .cell.ziel .num { color: #000; }
+[data-theme="paper"] .cell.current { outline: 3px solid #000; }
+[data-theme="paper"] .cell.landed { box-shadow: inset 0 0 0 3px #000; }
+[data-theme="paper"] .die { border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0,0,0,.18); }
+[data-theme="paper"] .player-panel li.turn { background: #f4f1e3; }
+
+/* ============================================================
+   Theme: Wine & cheese
+   ============================================================ */
+[data-theme="cheese"] {
+  --bg: #fbf2da;
+  --panel: #fffaf0;
+  --panel-2: #f2e6cb;
+  --line: #cba87a;
+  --text: #3b2a17;
+  --muted: #7c6a4f;
+  --accent: #9c2b39;
+  --accent-ink: #fff7ef;
+  --safe: #f4cf6b;
+  --clothing: #e8c7d2;
+  --start: #6f8f4c;
+  --ziel: #7a1f2b;
+}
+[data-theme="cheese"] body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(244, 207, 107, .28), transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(156, 43, 57, .18), transparent 45%),
+    var(--bg);
+}
+[data-theme="cheese"] .board {
+  background: #c9a879;
+  border-color: #a9814f;
+}
+[data-theme="cheese"] .cell.start .num,
+[data-theme="cheese"] .cell.ziel .num { color: #fff; }
+[data-theme="cheese"] .cell.big .num { color: #8a5a12; }
+[data-theme="cheese"] .card,
+[data-theme="cheese"] .modal-box { box-shadow: 0 10px 30px rgba(90, 50, 20, .22); }
