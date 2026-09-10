@@ -627,13 +627,14 @@ function renderTokens() {
     cell.querySelector(".tokens").innerHTML = "";
   });
 
+  const tags = playerTags();
   state.players.forEach((p, i) => {
     const cell = cellByPos[p.pos];
     if (!cell) return;
     const tk = document.createElement("div");
     tk.className = "token" + (i === state.turn && state.phase === "playing" ? " active" : "");
     tk.style.background = p.color;
-    tk.textContent = String(i + 1);
+    tk.textContent = tags[i];
     tk.title = p.name;
     cell.querySelector(".tokens").appendChild(tk);
   });
@@ -647,19 +648,64 @@ function renderTokens() {
   renderTurnInfo();
 }
 
+/* Short labels for the board tokens. Everyone starts at their initials and
+   any player still sharing a label grows it one letter at a time, so names
+   stay recognisable: Ala/Anna -> "Al"/"An", Jan Kowalski/Jakub Kowal ->
+   "Jan"/"Jak". Names that collide even at three letters (Ala/Alan) get the
+   initial plus their number. */
+function playerTags() {
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+  // progressively more specific labels for one player
+  const formsFor = (p) => {
+    const words = p.name.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return ["?"];
+    const compact = words.join("");
+    const forms = [words.length > 1
+      ? (words[0][0] + words[1][0]).toUpperCase()
+      : words[0][0].toUpperCase()];
+    for (let n = 2; n <= 3; n++) {
+      if (compact.length >= n) forms.push(cap(compact.slice(0, n)));
+    }
+    return forms;
+  };
+
+  const forms = state.players.map(formsFor);
+  const step = forms.map(() => 0);
+  const labels = () => forms.map((f, i) => f[Math.min(step[i], f.length - 1)]);
+
+  // grow only the labels that are still ambiguous, until nothing improves
+  for (let pass = 0; pass < 4; pass++) {
+    const cur = labels();
+    const counts = cur.reduce((m, s) => (m[s] = (m[s] || 0) + 1, m), {});
+    let grew = false;
+    cur.forEach((tag, i) => {
+      if (counts[tag] > 1 && step[i] < forms[i].length - 1) { step[i]++; grew = true; }
+    });
+    if (!grew) break;
+  }
+
+  const final = labels();
+  const counts = final.reduce((m, s) => (m[s] = (m[s] || 0) + 1, m), {});
+  return final.map((tag, i) => (counts[tag] > 1 ? tag.charAt(0) + (i + 1) : tag));
+}
+
 function renderPanel() {
   els.playerPanel.innerHTML = "";
+  const tags = playerTags();
   state.players.forEach((p, i) => {
     const li = document.createElement("li");
     if (i === state.turn && state.phase === "playing") li.classList.add("turn");
 
+    // same marker as on the board, so the list maps onto the tokens at a glance
     const dot = document.createElement("span");
-    dot.className = "dot";
+    dot.className = "dot dot-tag";
     dot.style.background = p.color;
+    dot.textContent = tags[i];
 
     const name = document.createElement("span");
     name.className = "pname";
-    name.textContent = (i + 1) + ". " + p.name;
+    name.textContent = p.name;
 
     const meta = document.createElement("span");
     meta.className = "pmeta";
@@ -691,7 +737,7 @@ function renderTurnInfo() {
 function enterGame() {
   els.setupScreen.classList.add("hidden");
   els.gameScreen.classList.remove("hidden");
-  setDieFace(1);
+  clearDie();
   renderTokens();
   if (state.phase === "won") {
     els.rollMsg.textContent = t("wonReset", { name: state.winnerName });
@@ -761,6 +807,7 @@ function endTurn(delay) {
     state.rollAgain = false;
     renderTokens();
     saveState();
+    clearDie();
     els.rollBtn.disabled = false;
     busy = false;
     focusSoon(els.rollBtn);
@@ -922,6 +969,7 @@ function closeTile() {
 
   if (rollAgain && state.phase === "playing") {
     setRollMsg("rollsAgain", { name: state.players[state.turn].name });
+    clearDie();
     els.rollBtn.disabled = false;
     busy = false;
     saveState();
@@ -975,6 +1023,13 @@ function setDieFace(face) {
   [...els.die.children].forEach((span, i) => {
     span.classList.toggle("on", pips.indexOf(i) !== -1);
   });
+  els.die.classList.toggle("idle", !pips.length);
+}
+
+/* Blank the die whenever a fresh roll is pending, so the previous player's
+   result is never left sitting there looking like the current player's. */
+function clearDie() {
+  setDieFace(0);
 }
 
 function animateDie(finalFace, done) {
