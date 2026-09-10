@@ -12,6 +12,8 @@
   --start: #245c3a;
   --ziel: #7a2530;
   --radius: 12px;
+  --grid: #2b3047;   /* thin line between consecutive fields */
+  --wall: #7f8ac4;   /* thick wall of the spiral corridor */
 }
 
 * { box-sizing: border-box; }
@@ -73,6 +75,17 @@ select, input[type="text"] {
   padding: 10px 12px;
   font-size: 1rem;
   width: 100%;
+}
+
+.field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+.field-check input {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .name-inputs {
@@ -138,6 +151,14 @@ select, input[type="text"] {
 .rules summary { cursor: pointer; }
 .rules ul { padding-left: 18px; }
 .rules li { margin: 4px 0; }
+kbd {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 0.9em;
+}
 
 /* ---------- Topbar ---------- */
 .topbar {
@@ -170,6 +191,22 @@ select, input[type="text"] {
   padding: 8px 10px;
   font-size: 0.85rem;
 }
+.icon-btn {
+  flex: 0 0 auto;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
 .turn-info .chip {
   display: inline-block;
   width: 12px;
@@ -192,10 +229,11 @@ select, input[type="text"] {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(8, 1fr);
-  gap: 3px;
-  background: var(--line);
-  border: 3px solid var(--line);
-  border-radius: 8px;
+  gap: 0;
+  background: transparent;
+  border: 5px solid var(--wall);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .cell {
@@ -206,7 +244,13 @@ select, input[type="text"] {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  border: 1px solid var(--grid);
 }
+/* thick edges = the wall of the spiral corridor */
+.cell.wall-t { border-top: 3px solid var(--wall); }
+.cell.wall-r { border-right: 3px solid var(--wall); }
+.cell.wall-b { border-bottom: 3px solid var(--wall); }
+.cell.wall-l { border-left: 3px solid var(--wall); }
 
 .cell .num {
   font-size: clamp(7px, 1.15vw, 12px);
@@ -243,29 +287,39 @@ select, input[type="text"] {
 
 .tokens {
   position: absolute;
-  left: 2px;
-  right: 2px;
-  bottom: 2px;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+  justify-content: flex-end;
+  z-index: 3;
 }
 .token {
-  width: clamp(10px, 1.9vw, 18px);
-  height: clamp(10px, 1.9vw, 18px);
+  width: clamp(16px, 3vw, 26px);
+  height: clamp(16px, 3vw, 26px);
   border-radius: 50%;
   color: #fff;
-  font-size: clamp(6px, 1.1vw, 10px);
+  font-size: clamp(9px, 1.7vw, 14px);
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid rgba(0,0,0,.45);
-  box-shadow: 0 1px 2px rgba(0,0,0,.4);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.55);
 }
 .token.active {
-  border-color: #fff;
-  transform: scale(1.15);
+  z-index: 6;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 10px 2px var(--accent), 0 2px 5px rgba(0,0,0,.6);
+  animation: tokenPulse 1.5s ease-in-out infinite;
+}
+@keyframes tokenPulse {
+  0%, 100% { transform: scale(1.1); }
+  50% { transform: scale(1.28); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .token.active { animation: none; transform: scale(1.2); }
 }
 
 /* ---------- Controls ---------- */
@@ -329,7 +383,8 @@ select, input[type="text"] {
 }
 .player-panel li.turn {
   border-color: var(--accent);
-  background: #23252f;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .player-panel .dot {
   width: 14px;
@@ -360,6 +415,7 @@ select, input[type="text"] {
   z-index: 50;
 }
 .modal-box {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -367,7 +423,12 @@ select, input[type="text"] {
   max-width: 420px;
   width: 100%;
 }
-.modal-box h2 { margin: 0 0 12px; font-size: 1.3rem; }
+.modal-box h2 { margin: 0 0 12px; font-size: 1.3rem; padding-right: 40px; }
+#replaySpeak {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
 .tile-task { font-size: 1.05rem; line-height: 1.4; margin: 0 0 10px; }
 .tile-note { color: var(--muted); font-size: 0.9rem; margin: 8px 0; }
 .tile-effect { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
@@ -457,6 +518,8 @@ select, input[type="text"] {
   --clothing: #ffffff;
   --start: #ffffff;
   --ziel: #ffffff;
+  --grid: #9a9a9a;
+  --wall: #000000;
   font-family: Arial, "Helvetica Neue", Helvetica, "Liberation Sans", sans-serif;
 }
 [data-theme="paper"] body {
@@ -474,11 +537,14 @@ select, input[type="text"] {
 [data-theme="paper"] .btn-ghost { background: transparent; }
 
 [data-theme="paper"] .board {
-  gap: 2px;
-  background: #000;
+  background: #fff;
   border-color: #000;
-  border-width: 3px;
+  border-width: 4px;
   border-radius: 2px;
+}
+[data-theme="paper"] .token { border-color: #000; color: #fff; }
+[data-theme="paper"] .token.active {
+  box-shadow: 0 0 0 3px #000, 0 2px 4px rgba(0,0,0,.4);
 }
 [data-theme="paper"] .cell { background: #fff; }
 [data-theme="paper"] .cell .num { color: #000; }
@@ -490,7 +556,6 @@ select, input[type="text"] {
 [data-theme="paper"] .cell.current { outline: 3px solid #000; }
 [data-theme="paper"] .cell.landed { box-shadow: inset 0 0 0 3px #000; }
 [data-theme="paper"] .die { border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0,0,0,.18); }
-[data-theme="paper"] .player-panel li.turn { background: #f4f1e3; }
 
 /* ============================================================
    Theme: Wine & cheese
@@ -508,6 +573,8 @@ select, input[type="text"] {
   --clothing: #e8c7d2;
   --start: #6f8f4c;
   --ziel: #7a1f2b;
+  --grid: #ddc49b;
+  --wall: #8c5a2b;
 }
 [data-theme="cheese"] body {
   background:
@@ -516,8 +583,8 @@ select, input[type="text"] {
     var(--bg);
 }
 [data-theme="cheese"] .board {
-  background: #c9a879;
-  border-color: #a9814f;
+  background: var(--panel);
+  border-color: var(--wall);
 }
 [data-theme="cheese"] .cell.start .num,
 [data-theme="cheese"] .cell.ziel .num { color: #fff; }

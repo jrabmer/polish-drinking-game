@@ -41,6 +41,28 @@ let LANG = "en";
 const THEME_IDS = ["modern", "paper", "cheese"];
 let THEME = "modern";
 
+const SPEECH_LANG = { en: "en-US", de: "de-DE", pl: "pl-PL" };
+const ttsSupported = typeof window !== "undefined" && "speechSynthesis" in window;
+let SPEAK = false;
+let voicesCache = [];
+let lastSpokenText = "";
+
+/* Uniform random integer in [0, max). Uses the crypto RNG with rejection
+   sampling so every value is equally likely (no modulo bias); falls back to
+   Math.random() if Web Crypto is unavailable. */
+function randInt(max) {
+  const g = (typeof window !== "undefined" && (window.crypto || window.msCrypto)) || null;
+  if (g && g.getRandomValues) {
+    const limit = Math.floor(256 / max) * max;
+    const buf = new Uint8Array(1);
+    let x;
+    do { g.getRandomValues(buf); x = buf[0]; } while (x >= limit);
+    return x % max;
+  }
+  return Math.floor(Math.random() * max);
+}
+const rollD6 = () => 1 + randInt(6);
+
 let state = null;
 let busy = false;
 let currentTilePos = null;  // field whose modal is open (for re-render on lang switch)
@@ -59,10 +81,11 @@ async function boot() {
   [
     "setupScreen", "gameScreen", "setupSubtitle", "loadError",
     "labelBoard", "configSelect", "labelLang", "langSelect",
-    "labelTheme", "themeSelect", "labelCount", "playerCount",
+    "labelTheme", "themeSelect", "labelSpeak", "speakField", "labelCount", "playerCount",
     "nameInputs", "startBtn", "howSummary", "rulesList",
-    "turnInfo", "themeSelectTop", "langSelectTop", "resetBtn", "board", "die", "rollBtn", "rollMsg", "playerPanel",
-    "tileModal", "tileTitle", "tileTask", "tileNote", "tileEffect", "tileActions",
+    "turnInfo", "themeSelectTop", "langSelectTop", "speakBtn", "resetBtn",
+    "board", "die", "rollBtn", "rollMsg", "playerPanel",
+    "tileModal", "tileTitle", "replaySpeak", "tileTask", "tileNote", "tileEffect", "tileActions",
     "confirmModal", "confirmTitle", "confirmText", "confirmRestart", "confirmNew", "confirmCancel",
     "winModal", "winTitleH", "winText", "winFlavour", "winAgain", "winNew", "toast",
   ].forEach((id) => { els[id] = el(id); });
@@ -90,6 +113,9 @@ async function boot() {
   THEME = normTheme(params.get("theme") || (prefs && prefs.theme) || "modern");
   applyTheme();
 
+  SPEAK = (params.get("speak") === "1") || !!(prefs && prefs.speak);
+  initTTS();
+
   buildConfigSelect();
   buildThemeSelects();
   try {
@@ -113,6 +139,7 @@ async function boot() {
     }
     if (saved.lang && langSupported(saved.lang)) LANG = saved.lang;
     if (saved.theme) { THEME = normTheme(saved.theme); applyTheme(); }
+    if (typeof saved.speak === "boolean") SPEAK = saved.speak;
     state = saved;
     applyLang();
     enterGame();
@@ -216,6 +243,67 @@ function buildThemeSelects() {
 }
 
 /* ============================================================
+   Text-to-speech (Web Speech API)
+   ============================================================ */
+function initTTS() {
+  if (!ttsSupported) {
+    els.speakBtn.classList.add("hidden");
+    els.speakField.classList.add("hidden");
+    els.replaySpeak.classList.add("hidden");
+    return;
+  }
+  const load = () => { try { voicesCache = speechSynthesis.getVoices() || []; } catch (e) {} };
+  load();
+  try { speechSynthesis.addEventListener("voiceschanged", load); } catch (e) {}
+}
+
+function pickVoice(langTag) {
+  const pfx = String(langTag).slice(0, 2).toLowerCase();
+  return voicesCache.find((v) => v.lang && v.lang.toLowerCase().indexOf(pfx) === 0) || null;
+}
+
+function utter(text) {
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = SPEECH_LANG[LANG] || "en-US";
+    const v = pickVoice(u.lang);
+    if (v) u.voice = v;
+    u.rate = 0.97;
+    speechSynthesis.speak(u);
+  } catch (e) { /* ignore */ }
+}
+
+// Speak when a field opens (only if the toggle is on). Remembers the text so
+// the in-modal replay button can repeat it regardless of the toggle.
+function speakField(text) {
+  lastSpokenText = text || "";
+  if (SPEAK && ttsSupported && text) utter(text);
+}
+
+function replaySpeak() {
+  if (ttsSupported && lastSpokenText) utter(lastSpokenText);
+}
+
+function setSpeak(on) {
+  SPEAK = !!on;
+  if (!SPEAK && ttsSupported) { try { speechSynthesis.cancel(); } catch (e) {} }
+  savePrefs();
+  if (state) { state.speak = SPEAK; saveState(); }
+  applySpeakUI();
+}
+
+function applySpeakUI() {
+  if (!ttsSupported) return;
+  els.speakField.checked = SPEAK;
+  els.speakBtn.setAttribute("aria-pressed", String(SPEAK));
+  els.speakBtn.textContent = SPEAK ? "🔊" : "🔇";
+  els.speakBtn.title = t("readAloud");
+  els.labelSpeak.textContent = t("readAloud");
+  els.replaySpeak.title = t("readAgain");
+}
+
+/* ============================================================
    i18n helpers
    ============================================================ */
 function t(key, params) {
@@ -276,6 +364,7 @@ function applyLang() {
   els.langSelect.value = LANG;
   els.langSelectTop.value = LANG;
   if (UI) buildThemeSelects();
+  applySpeakUI();
 
   renderNameInputs();
   rebuildBoardText();
@@ -376,6 +465,10 @@ function wireEvents() {
   els.themeSelect.addEventListener("change", onThemeChange);
   els.themeSelectTop.addEventListener("change", onThemeChange);
 
+  els.speakField.addEventListener("change", (e) => setSpeak(e.target.checked));
+  els.speakBtn.addEventListener("click", () => setSpeak(!SPEAK));
+  els.replaySpeak.addEventListener("click", replaySpeak);
+
   els.startBtn.addEventListener("click", onStartGame);
   els.rollBtn.addEventListener("click", onRoll);
 
@@ -385,6 +478,53 @@ function wireEvents() {
   els.confirmNew.addEventListener("click", () => { hide(els.confirmModal); toSetup(); });
   els.winAgain.addEventListener("click", () => { hide(els.winModal); restartSamePlayers(); });
   els.winNew.addEventListener("click", () => { hide(els.winModal); toSetup(); });
+
+  document.addEventListener("keydown", onKey);
+}
+
+/* Enter / Space: roll on your turn, or dismiss the field popup. */
+function onKey(e) {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  const isEnter = e.key === "Enter";
+  const isSpace = e.key === " " || e.key === "Spacebar";
+  if (!isEnter && !isSpace) return;
+
+  const target = e.target || document.body;
+  const tag = (target.tagName || "").toLowerCase();
+
+  // Setup screen: Enter from a name field starts the game.
+  if (!els.setupScreen.classList.contains("hidden")) {
+    if (isEnter && tag === "input" && target.type === "text") {
+      e.preventDefault();
+      onStartGame();
+    }
+    return;
+  }
+
+  // A focused button/select/input already handles these keys natively —
+  // don't act again or we'd double-trigger.
+  if (tag === "button" || tag === "select" || tag === "input" ||
+      tag === "textarea" || target.isContentEditable) return;
+
+  // Field popup open: trigger Continue, or a lone effect button (dice roll).
+  if (!els.tileModal.classList.contains("hidden")) {
+    e.preventDefault();
+    const cont = els.tileActions.querySelector("button");
+    if (cont) { cont.click(); return; }
+    const fx = els.tileEffect.querySelectorAll("button");
+    if (fx.length === 1) fx[0].click();
+    return;
+  }
+
+  // Don't hijack keys while the reset / win dialogs are up.
+  if (!els.confirmModal.classList.contains("hidden") ||
+      !els.winModal.classList.contains("hidden")) return;
+
+  // In-game: roll.
+  if (!els.gameScreen.classList.contains("hidden")) {
+    e.preventDefault(); // also suppresses Space page-scroll while busy
+    if (!els.rollBtn.disabled) onRoll();
+  }
 }
 
 function onStartGame() {
@@ -405,6 +545,7 @@ function onStartGame() {
     configFile: CONFIG.meta.file,
     lang: LANG,
     theme: THEME,
+    speak: SPEAK,
   };
   saveState();
   applyLang();
@@ -450,7 +591,30 @@ function buildBoard() {
     cellByPos[pos] = cell;
   });
 
+  markSpiralWalls();
   rebuildBoardText();
+}
+
+/* Thicken the cell edges that form the wall of the spiral corridor: an edge
+   is a "wall" when the neighbouring grid cell is NOT the next/previous field
+   on the path (or there is no neighbour, i.e. the outer frame). */
+function markSpiralWalls() {
+  const posByGrid = {};
+  TILES.forEach((tile, pos) => { posByGrid[tile.c + "," + tile.r] = pos; });
+
+  TILES.forEach((tile, pos) => {
+    const cell = cellByPos[pos];
+    const sides = [
+      ["t", tile.c, tile.r - 1],
+      ["r", tile.c + 1, tile.r],
+      ["b", tile.c, tile.r + 1],
+      ["l", tile.c - 1, tile.r],
+    ];
+    sides.forEach(([side, nc, nr]) => {
+      const np = posByGrid[nc + "," + nr];
+      if (np === undefined || Math.abs(np - pos) !== 1) cell.classList.add("wall-" + side);
+    });
+  });
 }
 
 // (re)fill the language-dependent text on every cell
@@ -546,6 +710,7 @@ function enterGame() {
   } else {
     setRollMsg("tapToStart");
     els.rollBtn.disabled = false;
+    focusSoon(els.rollBtn);
   }
 }
 
@@ -556,7 +721,7 @@ function onRoll() {
   els.rollMsg.textContent = "";
   delete els.rollMsg.dataset.key;
 
-  const finalRoll = 1 + Math.floor(Math.random() * 6);
+  const finalRoll = rollD6();
   animateDie(finalRoll, () => applyRoll(finalRoll));
 }
 
@@ -609,6 +774,7 @@ function endTurn(delay) {
     saveState();
     els.rollBtn.disabled = false;
     busy = false;
+    focusSoon(els.rollBtn);
   }, delay || 0);
 }
 
@@ -621,6 +787,7 @@ function openTile(pos) {
 
   els.tileTitle.textContent = pos === WIN_POS ? t("ziel") : t("fieldTitle", { n: tile.n });
   els.tileTask.textContent = tile.big ? t("safeField") : fieldText(tile);
+  speakField(els.tileTask.textContent);
 
   if (tile.clothing) {
     els.tileNote.textContent = t("clothing");
@@ -698,17 +865,19 @@ function buildEffectUI(fx) {
       break;
     }
     case "diceBack": {
-      els.tileEffect.appendChild(mkBtn(t("rollNDice", { n: fx.times }), () => {
+      const diceBtn = mkBtn(t("rollNDice", { n: fx.times }), () => {
         const rolls = [];
         let sum = 0;
         for (let i = 0; i < fx.times; i++) {
-          const d = 1 + Math.floor(Math.random() * 6);
+          const d = rollD6();
           rolls.push(d);
           sum += d;
         }
         p.pos = clampTile(p.pos - sum);
         finish(t("rolledBack", { rolls: rolls.join(" + "), sum, pos: posLabel(p.pos) }));
-      }));
+      });
+      els.tileEffect.appendChild(diceBtn);
+      focusSoon(diceBtn);
       break;
     }
     case "choice": {
@@ -744,7 +913,15 @@ function buildEffectUI(fx) {
 
 function addContinueButton() {
   els.tileActions.innerHTML = "";
-  els.tileActions.appendChild(mkBtn(t("continue"), closeTile, "btn-primary"));
+  const btn = mkBtn(t("continue"), closeTile, "btn-primary");
+  els.tileActions.appendChild(btn);
+  focusSoon(btn);
+}
+
+// Move keyboard focus without yanking the page around on touch devices.
+function focusSoon(node) {
+  if (!node) return;
+  setTimeout(() => { try { node.focus({ preventScroll: true }); } catch (e) { node.focus(); } }, 0);
 }
 
 function closeTile() {
@@ -759,6 +936,7 @@ function closeTile() {
     els.rollBtn.disabled = false;
     busy = false;
     saveState();
+    focusSoon(els.rollBtn);
   } else {
     endTurn(0);
   }
@@ -784,6 +962,7 @@ function restartSamePlayers() {
   state.configFile = CONFIG.meta.file;
   state.lang = LANG;
   state.theme = THEME;
+  state.speak = SPEAK;
   busy = false;
   saveState();
   enterGame();
@@ -813,7 +992,7 @@ function animateDie(finalFace, done) {
   els.die.classList.add("rolling");
   let ticks = 0;
   const iv = setInterval(() => {
-    setDieFace(1 + Math.floor(Math.random() * 6));
+    setDieFace(rollD6()); // cosmetic tumble only
     ticks++;
     if (ticks >= 9) {
       clearInterval(iv);
@@ -898,6 +1077,7 @@ function savePrefs() {
       configFile: CONFIG ? CONFIG.meta.file : null,
       lang: LANG,
       theme: THEME,
+      speak: SPEAK,
     }));
   } catch (e) { /* ignore */ }
 }

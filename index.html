@@ -32,6 +32,11 @@
           <select id="themeSelect"></select>
         </label>
 
+        <label class="field field-check">
+          <input type="checkbox" id="speakField" />
+          <span id="labelSpeak"></span>
+        </label>
+
         <label class="field">
           <span id="labelCount"></span>
           <select id="playerCount"></select>
@@ -53,6 +58,7 @@
       <header class="topbar">
         <div id="turnInfo" class="turn-info">&nbsp;</div>
         <div class="topbar-actions">
+          <button id="speakBtn" class="icon-btn" type="button" aria-pressed="false">🔇</button>
           <select id="themeSelectTop" class="lang-mini"></select>
           <select id="langSelectTop" class="lang-mini"></select>
           <button id="resetBtn" class="btn btn-ghost"></button>
@@ -124,6 +130,7 @@
     <div id="tileModal" class="modal hidden" role="dialog" aria-modal="true">
       <div class="modal-box">
         <h2 id="tileTitle">Field</h2>
+        <button id="replaySpeak" class="icon-btn" type="button">🔊</button>
         <p id="tileTask" class="tile-task"></p>
         <p id="tileNote" class="tile-note hidden"></p>
         <div id="tileEffect" class="tile-effect"></div>

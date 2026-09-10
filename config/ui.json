@@ -11,7 +11,8 @@
       "Move the number you rolled and do the task on the field you land on — or take a drink instead.",
       "Fields showing only a big number are safe: no task.",
       "Fixed movement tasks (“go to field 32”, “back 2”, “to START”) are applied automatically. The field you land on afterwards is <em>not</em> re-triggered.",
-      "You must land on <strong>ZIEL</strong> exactly. Overshoot and your turn is forfeited."
+      "You must land on <strong>ZIEL</strong> exactly. Overshoot and your turn is forfeited.",
+      "Press <kbd>Enter</kbd> or <kbd>Space</kbd> to roll and to dismiss a field."
     ],
     "board": "Board",
     "language": "Language",
@@ -19,6 +20,8 @@
     "themeModern": "Modern",
     "themePaper": "Original paper",
     "themeCheese": "Wine & cheese",
+    "readAloud": "Read fields out loud",
+    "readAgain": "Read again",
     "numPlayers": "Number of players",
     "playerN": "Player",
     "startGame": "Start game",
@@ -75,7 +78,8 @@
       "Ziehe die gewürfelte Zahl und erfülle die Aufgabe auf dem Feld — oder trink stattdessen.",
       "Felder mit nur einer großen Zahl sind sicher: keine Aufgabe.",
       "Feste Bewegungs-Aufgaben („geh auf Feld 32“, „2 zurück“, „auf START“) werden automatisch ausgeführt. Das danach erreichte Feld wird <em>nicht</em> erneut ausgelöst.",
-      "Du musst exakt auf <strong>ZIEL</strong> landen. Bei Überwurf verfällt dein Zug."
+      "Du musst exakt auf <strong>ZIEL</strong> landen. Bei Überwurf verfällt dein Zug.",
+      "Mit <kbd>Enter</kbd> oder <kbd>Leertaste</kbd> würfelst du und schließt ein Feld."
     ],
     "board": "Spielplan",
     "language": "Sprache",
@@ -83,6 +87,8 @@
     "themeModern": "Modern",
     "themePaper": "Original (Papier)",
     "themeCheese": "Wein & Käse",
+    "readAloud": "Felder vorlesen",
+    "readAgain": "Nochmal vorlesen",
     "numPlayers": "Anzahl Spieler",
     "playerN": "Spieler",
     "startGame": "Spiel starten",
@@ -139,7 +145,8 @@
       "Przesuń się o wyrzuconą liczbę i wykonaj zadanie z pola, na którym staniesz — albo się napij.",
       "Pola z samą dużą liczbą są bezpieczne: bez zadania.",
       "Zadania ze stałym ruchem („idź na pole 32”, „cofnij o 2”, „na START”) wykonują się automatycznie. Pole, na które wtedy trafisz, <em>nie</em> jest wywoływane ponownie.",
-      "Na <strong>METĘ</strong> trzeba trafić dokładnie. Przy przekroczeniu tracisz turę."
+      "Na <strong>METĘ</strong> trzeba trafić dokładnie. Przy przekroczeniu tracisz turę.",
+      "Klawiszem <kbd>Enter</kbd> lub <kbd>Spacja</kbd> rzucasz kostką i zamykasz pole."
     ],
     "board": "Plansza",
     "language": "Język",
@@ -147,6 +154,8 @@
     "themeModern": "Nowoczesny",
     "themePaper": "Oryginał (papier)",
     "themeCheese": "Wino i ser",
+    "readAloud": "Czytaj pola na głos",
+    "readAgain": "Przeczytaj ponownie",
     "numPlayers": "Liczba graczy",
     "playerN": "Gracz",
     "startGame": "Rozpocznij grę",

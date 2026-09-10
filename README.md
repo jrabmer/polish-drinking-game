@@ -71,22 +71,66 @@ rules live at the bottom of `styles.css`. The chosen theme is saved (per browser
 forced with `?theme=paper`. The wine & cheese decorations are inline SVG in `index.html`
 (`#boardDeco`), shown only for that theme.
 
+Each theme sets `--grid` (thin line between consecutive fields) and `--wall` (thick line
+along the spiral's walls) alongside its palette — see *Reading the spiral* below.
+
+## Reading the spiral
+
+The path snakes inward, which is hard to follow on a plain grid. `markSpiralWalls()` walks
+the field list and, for each of a cell's four edges, checks whether the neighbouring grid cell
+is the **next or previous field on the path**. If it isn't (or there's no neighbour at all),
+that edge gets a thick `--wall` border; edges you actually travel through stay a hairline
+`--grid`. The result is a drawn corridor from START to ZIEL, the way the original printout uses
+heavy rules. It's derived from the config at load time, so a custom board gets correct walls
+for free.
+
 ## Controls during a game
 
 - **Roll** — take your turn.
+- <kbd>Enter</kbd> / <kbd>Space</kbd> — roll, and dismiss the field popup. Focus is moved to
+  the relevant button automatically, so you can play a whole game one-handed without the
+  mouse. On the setup screen, <kbd>Enter</kbd> in a name box starts the game.
+- **🔊 / 🔇** (top bar) — toggle reading each field's task out loud.
 - **Theme** and **Language** dropdowns (top bar) — switch at any time, mid-game included.
 - **Reset** (top right) — choose *Restart (same players, back to START)* or *New game
   (back to the setup screen)*.
 
+## Read fields out loud
+
+The app can speak each field's task when you land on it, using the browser's built-in
+**Web Speech API** (`speechSynthesis`) — no network calls, no API keys, no audio files.
+Enable it with the checkbox on the setup screen or the speaker button in the top bar; the
+🔊 button inside a field popup repeats the last text even when the toggle is off.
+
+The utterance language follows the game language (`en-US` / `de-DE` / `pl-PL`) and the app
+picks a matching installed voice when one exists, otherwise it hands the language tag to the
+browser and lets it choose. Quality and availability of voices are entirely up to the
+operating system and browser — desktop Chrome/Edge/Safari and both mobile platforms ship
+voices for all three languages; a bare Linux install often ships none, in which case nothing
+is spoken. Where the API is missing entirely, the controls hide themselves.
+
+## Randomness
+
+Dice rolls use `crypto.getRandomValues()` (the platform CSPRNG) rather than `Math.random()`.
+Values `0–255` are drawn one byte at a time and any byte in the last, incomplete block of six
+(`252–255`) is discarded and redrawn — *rejection sampling*, which keeps all six faces exactly
+equally likely. Taking `byte % 6` without that step would make 1–4 slightly more likely than
+5–6, since 256 isn't a multiple of 6. `Math.random()` is kept only as a fallback for browsers
+without Web Crypto. See `randInt()` / `rollD6()` in `game.js`.
+
+Every roll goes through `rollD6()`: the turn roll, the "roll N dice and move back" fields, and
+the die-tumble animation.
+
 ## Saved state
 
 The current game (players, positions, whose turn, skip/roll-again flags, winner, chosen
-board, language and theme) is written to `localStorage` after every action, so a refresh or
-accidental tab close drops you straight back into the game. "New game" / reset clears it.
-The selected board, language and theme are also remembered for the setup screen. Everything
-is per-browser and never leaves the device.
+board, language, theme and read-aloud setting) is written to `localStorage` after every
+action, so a refresh or accidental tab close drops you straight back into the game.
+"New game" / reset clears it. Those same settings are also remembered for the setup screen.
+Everything is per-browser and never leaves the device.
 
-You can also force settings from the URL: `?config=classic.json`, `?lang=de`, `?theme=paper`.
+You can also force settings from the URL: `?config=classic.json`, `?lang=de`, `?theme=paper`,
+`?speak=1`.
 
 ## Languages
 
