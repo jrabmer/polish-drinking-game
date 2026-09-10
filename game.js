@@ -47,21 +47,10 @@ let SPEAK = false;
 let voicesCache = [];
 let lastSpokenText = "";
 
-/* Uniform random integer in [0, max). Uses the crypto RNG with rejection
-   sampling so every value is equally likely (no modulo bias); falls back to
-   Math.random() if Web Crypto is unavailable. */
-function randInt(max) {
-  const g = (typeof window !== "undefined" && (window.crypto || window.msCrypto)) || null;
-  if (g && g.getRandomValues) {
-    const limit = Math.floor(256 / max) * max;
-    const buf = new Uint8Array(1);
-    let x;
-    do { g.getRandomValues(buf); x = buf[0]; } while (x >= limit);
-    return x % max;
-  }
-  return Math.floor(Math.random() * max);
-}
-const rollD6 = () => 1 + randInt(6);
+/* One d6. Math.random() is already a good uniform generator (V8 uses
+   xorshift128+), and scaling by 6 introduces no bias the way `% 6` on a byte
+   would — so there is nothing to fix here for a dice game. */
+const rollD6 = () => 1 + Math.floor(Math.random() * 6);
 
 let state = null;
 let busy = false;

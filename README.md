@@ -111,15 +111,35 @@ is spoken. Where the API is missing entirely, the controls hide themselves.
 
 ## Randomness
 
-Dice rolls use `crypto.getRandomValues()` (the platform CSPRNG) rather than `Math.random()`.
-Values `0–255` are drawn one byte at a time and any byte in the last, incomplete block of six
-(`252–255`) is discarded and redrawn — *rejection sampling*, which keeps all six faces exactly
-equally likely. Taking `byte % 6` without that step would make 1–4 slightly more likely than
-5–6, since 256 isn't a multiple of 6. `Math.random()` is kept only as a fallback for browsers
-without Web Crypto. See `randInt()` / `rollD6()` in `game.js`.
+Every roll goes through one helper in `game.js` — the turn roll, the "roll N dice and move
+back" fields, and the die-tumble animation:
 
-Every roll goes through `rollD6()`: the turn roll, the "roll N dice and move back" fields, and
-the die-tumble animation.
+```js
+const rollD6 = () => 1 + Math.floor(Math.random() * 6);
+```
+
+`Math.random()` returns a float in `[0, 1)`; multiplying by 6 and flooring gives `0–5`
+uniformly, so each face lands 1-in-6. (The bias people warn about comes from `%` on a
+fixed-size integer — `byte % 6` over `0–255` favours the low faces because 256 isn't a
+multiple of 6. Scaling a float has no such problem.)
+
+**On seeding:** `Math.random()` is deliberately *not* seedable — the language provides no
+API to set or read its seed, by design. Each engine seeds its own generator from an internal
+entropy source when a page/realm is created, so you cannot reproduce a sequence, and two tabs
+get independent streams. V8 (Chrome/Edge/Node) uses **xorshift128+**, a fast non-cryptographic
+PRNG with a 128-bit state and a period of 2^128−1; it pre-generates values in a cache of 64
+and refills as needed. Firefox and Safari use the same algorithm.
+
+That is unpredictable *enough* for a party game but **not** cryptographically secure — given
+enough observed outputs, xorshift128+ state can be recovered and future values predicted. It
+would be the wrong tool for shuffling real money or generating tokens; for that you'd reach
+for `crypto.getRandomValues()` (and then rejection-sample to avoid the modulo bias above).
+Nobody is attacking a dice roll to get out of drinking, so plain `Math.random()` is the right
+call here.
+
+If you ever *wanted* reproducible games (fixed seed → identical sequence, handy for testing),
+you'd drop in a small seeded PRNG instead — e.g. `mulberry32` — since you can't seed the
+built-in one.
 
 ## Saved state
 
