@@ -101,7 +101,7 @@ explicit seed, and the seed is saved alongside the game. A refresh therefore reb
 Append to `pool` in `config/random.json`. Each entry is a tile without coordinates:
 
 ```jsonc
-{ "text": { "en": "...", "de": "...", "pl": "..." }, "fx": { ... }, "clothing": true }
+{ "text": { "en": "...", "de": "...", "pl": "..." }, "fx": { ... }, "clothing": "self" }
 ```
 
 Because a generated task can land on any field, it must not name a *fixed* field number.
@@ -236,9 +236,12 @@ Board files live in `config/`. Each is self-contained:
 - `c` / `r` are 1-based grid column / row. `gridCols` × `gridRows` cells must exist and each
   `c,r` pair must be unique; consecutive fields should be grid-adjacent so the path reads
   as a spiral.
-- `big: true` → safe field (no task). `clothing: true` → adds the "remove a piece of
-  clothing" hint. `text` may be a plain string (same in every language) or a
-  `{ lang: string }` object.
+- `big: true` → safe field (no task). `text` may be a plain string (same in every
+  language) or a `{ lang: string }` object.
+- `clothing` marks a clothing field and selects the 👕 note shown under the task, so the
+  note always restates *that* field rather than a generic line: `"self"` (you strip),
+  `"all"` (everyone strips) or `"choice"` (strip **or** drink instead). `true` behaves as
+  `"self"`.
 
 ### Effect shapes (`fx`)
 

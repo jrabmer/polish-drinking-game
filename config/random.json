@@ -64,8 +64,8 @@
     { "text": { "en": "Everyone who has a middle name drinks.", "de": "Wer einen zweiten Vornamen hat, trinkt.", "pl": "Kto ma drugie imię, pije." } },
     { "text": { "en": "Keep a straight face for 20 seconds while the others try to break you, or drink 3.", "de": "Bleib 20 Sekunden ernst, während die anderen dich zum Lachen bringen wollen, oder trink 3.", "pl": "Zachowaj powagę przez 20 sekund, gdy inni próbują cię rozśmieszyć, albo wypij 3." } },
     { "text": { "en": "Everyone drinks — you decide how much, but you drink double.", "de": "Alle trinken — du bestimmst wie viel, trinkst aber doppelt.", "pl": "Wszyscy piją — ty decydujesz ile, ale pijesz podwójnie." } },
-    { "text": { "en": "Take off one piece of clothing or drink 3.", "de": "Zieh ein Kleidungsstück aus oder trink 3.", "pl": "Zdejmij jedną część garderoby albo wypij 3." }, "clothing": true },
-    { "text": { "en": "Everyone drinks 2 and takes off one piece of clothing.", "de": "Alle trinken 2 und ziehen ein Kleidungsstück aus.", "pl": "Wszyscy piją 2 i zdejmują jedną część garderoby." }, "clothing": true },
+    { "text": { "en": "Take off one piece of clothing or drink 3.", "de": "Zieh ein Kleidungsstück aus oder trink 3.", "pl": "Zdejmij jedną część garderoby albo wypij 3." }, "clothing": "choice" },
+    { "text": { "en": "Everyone drinks 2 and takes off one piece of clothing.", "de": "Alle trinken 2 und ziehen ein Kleidungsstück aus.", "pl": "Wszyscy piją 2 i zdejmują jedną część garderoby." }, "clothing": "all" },
 
     { "text": { "en": "Drink 2 and move to field {n}.", "de": "Trink 2 und geh auf Feld {n}.", "pl": "Wypij 2 i przejdź na pole {n}." }, "fx": { "t": "goto", "to": "?" } },
     { "text": { "en": "A shortcut! Move to field {n}.", "de": "Eine Abkürzung! Geh auf Feld {n}.", "pl": "Skrót! Przejdź na pole {n}." }, "fx": { "t": "goto", "to": "?" } },

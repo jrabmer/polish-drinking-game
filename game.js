@@ -39,6 +39,11 @@ let LAST_TILE = 0;          // WIN_POS - 1
 let LANG = "en";
 
 const THEME_IDS = ["modern", "paper", "cheese"];
+
+/* A clothing field's note restates what that particular field asks:
+   "self"   - you alone strip        "all" - everyone strips
+   "choice" - strip *or* drink instead.  clothing:true means "self". */
+const CLOTHING_VARIANTS = ["self", "all", "choice"];
 let THEME = "modern";
 
 const SPEECH_LANG = { en: "en-US", de: "de-DE", pl: "pl-PL" };
@@ -288,7 +293,7 @@ function materializeEntry(entry, lastTile, rnd) {
   }
 
   const tile = { text: text, fx: fx };
-  if (entry.clothing) tile.clothing = true;
+  if (entry.clothing) tile.clothing = entry.clothing;   // keep the variant
   return tile;
 }
 
@@ -995,7 +1000,8 @@ function openTile(pos) {
   speakField(els.tileTask.textContent);
 
   if (tile.clothing) {
-    els.tileNote.textContent = t("clothing");
+    const v = CLOTHING_VARIANTS.indexOf(tile.clothing) !== -1 ? tile.clothing : "self";
+    els.tileNote.textContent = t("clothing" + v.charAt(0).toUpperCase() + v.slice(1));
     els.tileNote.classList.remove("hidden");
   } else {
     els.tileNote.classList.add("hidden");
