@@ -1042,10 +1042,15 @@ function buildEffectUI(fx) {
       break;
     }
     case "gotoPlayer": {
-      const ref = closestOtherPlayer(fx.target);
-      p.pos = clampTile(ref.pos);
-      finish(t(fx.target === "closestToZiel" ? "sentToLeader" : "sentToPlayer",
-               { name: ref.name, pos: posLabel(p.pos) }));
+      const ref = closestPlayer(fx.target);
+      const toZiel = fx.target === "closestToZiel";
+      if (ref === p) {
+        finish(t(toZiel ? "alreadyLeader" : "alreadyLast"));   // nowhere to go
+      } else {
+        p.pos = clampTile(ref.pos);
+        finish(t(toZiel ? "sentToLeader" : "sentToPlayer",
+                 { name: ref.name, pos: posLabel(p.pos) }));
+      }
       break;
     }
     case "skip": {
@@ -1066,7 +1071,7 @@ function buildEffectUI(fx) {
     case "combo": {
       fx.list.forEach((step) => {
         if (step.t === "goto") p.pos = step.to;
-        else if (step.t === "gotoPlayer") p.pos = clampTile(closestOtherPlayer(step.target).pos);
+        else if (step.t === "gotoPlayer") p.pos = clampTile(closestPlayer(step.target).pos);
         else if (step.t === "move") p.pos = clampTile(p.pos + step.d);
         else if (step.t === "again") state.rollAgain = true;
         else if (step.t === "skip") p.skip = true;
@@ -1325,11 +1330,14 @@ function clampTile(x) {
   return Math.max(0, Math.min(LAST_TILE, x));
 }
 
-// The other player nearest START (default) or nearest ZIEL (target: "closestToZiel").
-function closestOtherPlayer(target) {
-  const others = state.players.filter((_, i) => i !== state.turn);
-  let ref = others[0];
-  for (const o of others) {
+// The player nearest START (default) or nearest ZIEL (target: "closestToZiel").
+function closestPlayer(target) {
+  // The current player counts too: if you are already the one nearest START
+  // (or furthest ahead), there is nobody to move to and you stay where you
+  // are. Starting from yourself also means a tie resolves in your favour.
+  let ref = state.players[state.turn];
+  for (const o of state.players) {
+    if (o === ref) continue;
     const better = target === "closestToZiel" ? o.pos > ref.pos : o.pos < ref.pos;
     if (better) ref = o;
   }
