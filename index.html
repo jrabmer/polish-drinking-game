@@ -61,8 +61,11 @@
           <button id="speakBtn" class="icon-btn" type="button" aria-pressed="false">🔇</button>
           <select id="themeSelectTop" class="lang-mini"></select>
           <select id="langSelectTop" class="lang-mini"></select>
-          <button id="resetBtn" class="btn btn-ghost"></button>
         </div>
+        <!-- sibling of .topbar-actions so it can stay top-right on a phone
+             while the selects drop to their own row (CSS 'order' keeps it
+             last on wide screens) -->
+        <button id="resetBtn" class="btn btn-ghost"></button>
       </header>
 
       <div class="board-wrap">

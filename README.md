@@ -111,6 +111,20 @@ labels alike — and both then agree. Imported tasks that hard-code a target are
 same reason. Setting `meta.sizes` to more than one `[cols, rows]` pair lets the board shape
 vary too; the spiral is generated for whatever size is drawn.
 
+## Layout notes
+
+- **Top bar on phones.** The four controls need more width than a ~360px phone row, so
+  below 560px the bar splits: *whose turn it is* and **Reset** stay on the first row
+  (Reset top-right, where people reach for it), and the speaker toggle plus the two
+  dropdowns share the second. Previously they overflowed and Reset ended up off-screen,
+  reachable only in landscape. All four are pinned to the same 38px height — a `<select>`,
+  an icon button and a text button otherwise render three different heights.
+- **Themed backdrop.** The background is a fixed full-viewport layer (`body::before`),
+  not a background on `<body>` or `<html>`. A background painted on an element is sized
+  and tiled to that element's box, so when the content was shorter than the screen it
+  stopped part-way down and left a bare strip — which is why it appeared and disappeared
+  with zoom level.
+
 ## Reading the spiral
 
 The path snakes inward, which is hard to follow on a plain grid. `markSpiralWalls()` walks

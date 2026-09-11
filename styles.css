@@ -18,13 +18,35 @@
 
 * { box-sizing: border-box; }
 
+/* The themed backdrop is a fixed layer (body::before) rather than a background
+   on <body> or <html>. A background painted on an element is sized and tiled to
+   that element's box, so once the content was shorter than the screen it stopped
+   part-way down and left a bare strip - which is why it came and went with zoom.
+   A fixed layer is always exactly the viewport. <html> keeps a flat colour so
+   overscroll and any first paint show the right shade. */
+html {
+  background: var(--bg);
+  min-height: 100%;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg);
+  pointer-events: none;
+}
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
+}
+body {
+  background: transparent;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 html, body { overflow-x: hidden; }
 
@@ -166,24 +188,47 @@ kbd {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 .turn-info {
   font-size: 1.05rem;
   font-weight: 700;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .topbar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
+  order: 2;
 }
+.topbar #resetBtn { order: 3; flex: 0 0 auto; }
+
+/* The select, the speaker toggle and Reset are three different element types
+   with three different default paddings, so they rendered 29 / 33 / 39px tall.
+   Pin them all to one height and centre their own content. */
+.topbar .lang-mini,
+.topbar .icon-btn,
+.topbar #resetBtn {
+  height: 38px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.topbar .icon-btn { font-size: 1rem; padding-left: 11px; padding-right: 11px; }
+.topbar #resetBtn { padding-left: 14px; padding-right: 14px; }
 .lang-mini {
   width: auto;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 42vw;
+  text-overflow: ellipsis;
   background: var(--panel-2);
   border: 1px solid var(--line);
   color: var(--text);
@@ -530,6 +575,27 @@ kbd {
 @media (max-width: 560px) {
   .cell .task { font-size: 6px; }
   h1 { font-size: 1.6rem; }
+
+  /* The four controls need ~368px and a phone row is ~343px, so they used to
+     overflow to the right and Reset ended up off-screen (only reachable in
+     landscape). Give the controls a full row of their own and let the two
+     selects share whatever the buttons leave. */
+  .topbar { row-gap: 10px; }
+  /* row 1: whose turn it is + Reset (kept top-right, where people reach for it)
+     row 2: the speak toggle and the two dropdowns, sharing the full width    */
+  .turn-info { flex: 1 1 auto; }
+  .topbar #resetBtn { order: 1; }
+  .topbar-actions {
+    order: 2;
+    flex: 1 1 100%;
+    width: 100%;
+    flex-wrap: nowrap;          /* shrink the selects rather than wrap again */
+    justify-content: flex-start;
+  }
+  .lang-mini {
+    flex: 1 1 auto;
+    max-width: none;
+  }
 }
 
 /* ============================================================
@@ -590,8 +656,9 @@ kbd {
   --wall: #000000;
   font-family: Arial, "Helvetica Neue", Helvetica, "Liberation Sans", sans-serif;
 }
-[data-theme="paper"] body {
-  background: #e7e4d8;
+[data-theme="paper"] { background-color: #e7e4d8; }
+[data-theme="paper"] body::before {
+  background-color: #e7e4d8;
   background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.022) 0 1px, transparent 1px 3px);
 }
 [data-theme="paper"] .card,
@@ -644,7 +711,7 @@ kbd {
   --grid: #ddc49b;
   --wall: #8c5a2b;
 }
-[data-theme="cheese"] body {
+[data-theme="cheese"] body::before {
   background:
     radial-gradient(circle at 12% 8%, rgba(244, 207, 107, .28), transparent 42%),
     radial-gradient(circle at 88% 92%, rgba(156, 43, 57, .18), transparent 45%),
